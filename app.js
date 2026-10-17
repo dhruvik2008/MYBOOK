@@ -30,7 +30,7 @@ let waSelectedCustomer = null;
 document.addEventListener('DOMContentLoaded', () => {
   // Request Persistent Storage from Browser/iOS to prevent auto eviction
   if (navigator.storage && navigator.storage.persist) {
-    navigator.storage.persist().catch(() => {});
+    navigator.storage.persist().catch(() => { });
   }
 
   // Handle User 2 Auto Connect Link (from Partner WhatsApp Invite)
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }, 700);
     }
-  } catch (e) {}
+  } catch (e) { }
 
   loadData();
   initTheme();
@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
 const USERS_REGISTRY_KEY = 'mybook_users_registry_v2';
 const ACTIVE_USER_PHONE_KEY = 'mybook_active_user_phone_v2';
 const SESSION_LOCK_KEY = 'mybook_session_unlocked_v2';
+const GLOBAL_REGISTRY_TOKEN = 'na2ulgix';
 let currentActivePhone = localStorage.getItem(ACTIVE_USER_PHONE_KEY) || '';
 
 // User registry and partitioned storage helpers
@@ -73,7 +74,7 @@ function getUsersRegistry() {
       const parsed = JSON.parse(reg);
       if (Array.isArray(parsed)) return parsed;
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
@@ -327,7 +328,7 @@ function calculateCustomerBalance(customer) {
 }
 
 // Mobile Sidebar Drawer Management
-window.closeMobileSidebar = function() {
+window.closeMobileSidebar = function () {
   const sidebar = document.getElementById('sidebar');
   const sidebarBackdrop = document.getElementById('sidebarBackdrop');
   if (sidebar) sidebar.classList.remove('open');
@@ -335,7 +336,7 @@ window.closeMobileSidebar = function() {
   document.body.classList.remove('sidebar-drawer-open');
 };
 
-window.openMobileSidebar = function() {
+window.openMobileSidebar = function () {
   const sidebar = document.getElementById('sidebar');
   const sidebarBackdrop = document.getElementById('sidebarBackdrop');
   if (sidebar) sidebar.classList.add('open');
@@ -343,7 +344,7 @@ window.openMobileSidebar = function() {
   document.body.classList.add('sidebar-drawer-open');
 };
 
-window.toggleMobileSidebar = function() {
+window.toggleMobileSidebar = function () {
   const sidebar = document.getElementById('sidebar');
   if (sidebar && sidebar.classList.contains('open')) {
     window.closeMobileSidebar();
@@ -1212,11 +1213,11 @@ function initPinLock() {
         }
       } else {
         if (userStatusTag) {
-          userStatusTag.textContent = 'New Account';
-          userStatusTag.style.color = '#818cf8';
+          userStatusTag.textContent = 'Cloud / New User';
+          userStatusTag.style.color = '#38bdf8';
         }
         if (pinInstructionLabel) {
-          pinInstructionLabel.textContent = `Set 4-Digit Security PIN (First Time)`;
+          pinInstructionLabel.textContent = `Enter 4-Digit PIN (Auto-Restores from Cloud)`;
         }
       }
     } else {
@@ -1256,7 +1257,10 @@ function initPinLock() {
     if (pinErrorMsg) pinErrorMsg.textContent = '';
   }
 
+  let isPinChecking = false;
+
   function handleDigit(digit) {
+    if (isPinChecking) return;
     if (enteredPin.length >= 4) return;
     enteredPin += digit;
     updateDots();
@@ -1267,6 +1271,7 @@ function initPinLock() {
   }
 
   function handleBackspace() {
+    if (isPinChecking) return;
     if (enteredPin.length > 0) {
       enteredPin = enteredPin.slice(0, -1);
       updateDots();
@@ -1274,18 +1279,21 @@ function initPinLock() {
   }
 
   function handleClear() {
+    if (isPinChecking) return;
     enteredPin = '';
     updateDots();
   }
 
-  function validatePin() {
+  async function validatePin() {
+    if (isPinChecking) return;
+
     const phone = loginPhoneInput ? loginPhoneInput.value.replace(/\D/g, '') : '';
     if (phone.length < 10) {
       pinDots.forEach(dot => dot.classList.add('error'));
       if (pinDotsContainer) pinDotsContainer.classList.add('shake');
       if (pinErrorMsg) {
         pinErrorMsg.style.color = '#f43f5e';
-        pinErrorMsg.textContent = 'Please enter your 10-digit mobile number first!';
+        pinErrorMsg.textContent = 'કૃપા કરીને પહેલા તમારો 10-અંકનો મોબાઈલ નંબર નાખો!';
       }
       if (loginPhoneInput) {
         loginPhoneInput.focus();
@@ -1303,15 +1311,15 @@ function initPinLock() {
     let user = registry.find(u => u.phone === phone);
 
     if (user) {
-      // Existing User: Verify their personal 4-digit PIN
+      // Existing User on this device: Verify their personal 4-digit PIN locally
       if (enteredPin === user.pin) {
-        unlockUserSession(phone, false);
+        unlockUserSession(phone, false, false);
       } else {
         pinDots.forEach(dot => dot.classList.add('error'));
         if (pinDotsContainer) pinDotsContainer.classList.add('shake');
         if (pinErrorMsg) {
           pinErrorMsg.style.color = '#f43f5e';
-          pinErrorMsg.textContent = 'Incorrect PIN for this mobile number! Try again.';
+          pinErrorMsg.textContent = 'ખોટો PIN છે! કૃપા કરીને સાચો PIN નાખો.';
         }
         setTimeout(() => {
           if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
@@ -1319,29 +1327,169 @@ function initPinLock() {
           updateDots();
         }, 700);
       }
-    } else {
-      // Brand New User: Register this phone with entered PIN
-      const newUser = {
-        phone: phone,
-        pin: enteredPin,
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString()
-      };
-      registry.push(newUser);
-      saveUsersRegistry(registry);
-      unlockUserSession(phone, true);
+      return;
     }
+
+    // =========================================================================
+    // User is NOT in local registry!
+    // (e.g. App uninstalled & re-installed, cache cleared, or new device)
+    // Automatically search the Cloud Vault for this phone number and PIN!
+    // =========================================================================
+    isPinChecking = true;
+    if (pinErrorMsg) {
+      pinErrorMsg.style.color = '#38bdf8';
+      pinErrorMsg.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> ક્લાઉડમાંથી ડેટા ચેક થઈ રહ્યો છે (+91 ${phone})...`;
+    }
+    if (pinInstructionLabel) {
+      pinInstructionLabel.textContent = 'ક્લાઉડ સર્વર સાથે કનેક્ટ થઈ રહ્યું છે...';
+    }
+
+    try {
+      let cloudVaultId = null;
+      let cloudSnapshot = null;
+      let cloudPin = null;
+
+      // 1. Check custom Firebase if configured
+      const customFirebase = (localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '').trim().replace(/\/$/, '');
+      if (customFirebase) {
+        try {
+          const fbRes = await fetch(`${customFirebase}/vaults/${phone}.json`);
+          if (fbRes.ok) {
+            const fbJson = await fbRes.json();
+            if (fbJson && fbJson.snapshot) {
+              cloudSnapshot = fbJson.snapshot;
+              cloudPin = fbJson.pin;
+            }
+          }
+        } catch (e) {
+          console.warn('Firebase check:', e);
+        }
+      }
+
+      // 2. Check Global KeyValue Registry for phone -> vaultId mapping
+      if (!cloudSnapshot) {
+        try {
+          const lookupRes = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${GLOBAL_REGISTRY_TOKEN}/phone_${phone}`);
+          if (lookupRes.ok) {
+            const rawId = await lookupRes.text();
+            const cleanId = rawId ? rawId.trim().replace(/^"|"$/g, '') : '';
+            if (cleanId && cleanId !== 'null' && cleanId.length > 5) {
+              cloudVaultId = cleanId;
+            }
+          }
+        } catch (lookupErr) {
+          console.warn('KeyValue lookup error:', lookupErr);
+        }
+
+        if (cloudVaultId) {
+          const vaultRes = await fetch(`https://api.restful-api.dev/objects/${cloudVaultId}`);
+          if (vaultRes.ok) {
+            const vaultObj = await vaultRes.json();
+            if (vaultObj && vaultObj.data) {
+              cloudPin = vaultObj.data.pin;
+              if (vaultObj.data.payload) {
+                try {
+                  cloudSnapshot = JSON.parse(vaultObj.data.payload);
+                } catch (parseErr) {
+                  console.error('Snapshot JSON parse error:', parseErr);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // If a cloud ledger was found for this phone number:
+      if (cloudSnapshot) {
+        // Verify PIN against cloud record
+        if (cloudPin && enteredPin !== cloudPin) {
+          isPinChecking = false;
+          pinDots.forEach(dot => dot.classList.add('error'));
+          if (pinDotsContainer) pinDotsContainer.classList.add('shake');
+          if (pinErrorMsg) {
+            pinErrorMsg.style.color = '#f43f5e';
+            pinErrorMsg.textContent = 'આ નંબરનું ક્લાઉડ એકાઉન્ટ મળ્યું છે, પરંતુ PIN ખોટો છે!';
+          }
+          if (pinInstructionLabel) {
+            pinInstructionLabel.textContent = 'સાચો 4-અંકનો PIN નાખો';
+          }
+          setTimeout(() => {
+            if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
+            enteredPin = '';
+            updateDots();
+          }, 900);
+          return;
+        }
+
+        // PIN MATCHED! Restore all user ledger data from the cloud!
+        currentActivePhone = phone;
+        localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+        localStorage.setItem(CLOUD_PHONE_KEY, phone);
+        localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
+        if (cloudVaultId) {
+          localStorage.setItem(CLOUD_VAULT_ID_KEY, cloudVaultId);
+          if (typeof getUserCloudVaultIdKey === 'function') {
+            localStorage.setItem(getUserCloudVaultIdKey(), cloudVaultId);
+          }
+        }
+
+        // Register user locally so subsequent logins are instant
+        const restoredUser = {
+          phone: phone,
+          pin: enteredPin,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          cloudVaultId: cloudVaultId || ''
+        };
+        registry.push(restoredUser);
+        saveUsersRegistry(registry);
+
+        // Apply snapshot to restore all customers, transactions & business partitions
+        applyFullLedgerSnapshot(cloudSnapshot);
+
+        isPinChecking = false;
+        unlockUserSession(phone, false, true);
+        return;
+      }
+    } catch (netErr) {
+      console.warn('Cloud auto-lookup encountered an error:', netErr);
+    }
+
+    // No cloud account found (or device offline) - Register as a brand new account
+    const newUser = {
+      phone: phone,
+      pin: enteredPin,
+      createdAt: new Date().toISOString(),
+      lastLogin: new Date().toISOString()
+    };
+    registry.push(newUser);
+    saveUsersRegistry(registry);
+    isPinChecking = false;
+    unlockUserSession(phone, true, false);
   }
 
-  function unlockUserSession(phone, isNew) {
+  function unlockUserSession(phone, isNew, isRestored = false) {
     pinDots.forEach(dot => dot.classList.add('success'));
     sessionStorage.setItem(SESSION_LOCK_KEY, 'true');
     currentActivePhone = phone;
     localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+    localStorage.setItem(CLOUD_PHONE_KEY, phone);
+
+    const registry = getUsersRegistry();
+    const currUser = registry.find(u => u.phone === phone);
+    if (currUser && currUser.pin) {
+      localStorage.setItem(CLOUD_PIN_KEY, currUser.pin);
+    }
 
     if (pinErrorMsg) {
       pinErrorMsg.style.color = '#10b981';
-      pinErrorMsg.textContent = isNew ? 'Account Created! Unlocking...' : 'PIN Verified! Unlocking...';
+      if (isRestored) {
+        pinErrorMsg.textContent = '🎉 ક્લાઉડમાંથી ડેટા આવી ગયો છે! ખુલી રહ્યું છે...';
+      } else if (isNew) {
+        pinErrorMsg.textContent = 'નવું એકાઉન્ટ બની ગયું! ખુલી રહ્યું છે...';
+      } else {
+        pinErrorMsg.textContent = 'PIN સાચો છે! ખુલી રહ્યું છે...';
+      }
     }
 
     // Load separate data for this user
@@ -1359,9 +1507,16 @@ function initPinLock() {
           pinErrorMsg.style.color = '';
           pinErrorMsg.textContent = '';
         }
-        showToast(isNew ? `Account created for +91 ${phone}!` : `Welcome back +91 ${phone}!`, 'success');
+        if (isRestored) {
+          showToast(`🎉 ક્લાઉડમાંથી +91 ${phone} નો બધો જ ડેટા પાછો આવી ગયો છે!`, 'success');
+        } else {
+          showToast(isNew ? `+91 ${phone} માટે નવું એકાઉન્ટ શરૂ થયું!` : `સ્વાગત છે +91 ${phone}!`, 'success');
+        }
+        if (typeof triggerAutoCloudSync === 'function') {
+          triggerAutoCloudSync();
+        }
       }, 350);
-    }, 250);
+    }, isRestored ? 400 : 250);
   }
 
   // Keypad clicks
@@ -1418,7 +1573,7 @@ function initPinLock() {
   }
 
   // Switch User / Logout Handlers
-  window.logoutAndSwitchUser = function() {
+  window.logoutAndSwitchUser = function () {
     sessionStorage.removeItem(SESSION_LOCK_KEY);
     pinLockScreen.classList.add('active');
     pinLockScreen.classList.remove('unlocking');
@@ -1487,7 +1642,7 @@ function initBackupAndSync() {
       const now = new Date();
       const dateStr = formatDateDMY(now);
       const businessName = localStorage.getItem(BUSINESS_NAME_KEY) || 'My Business';
-      
+
       const backupData = {
         appName: 'My Book',
         version: '2.2',
@@ -1587,6 +1742,11 @@ const CLOUD_AUTOSYNC_KEY = 'khatabook_cloud_autosync_v2';
 const CLOUD_LAST_SYNC_KEY = 'khatabook_cloud_last_sync_v2';
 const FIREBASE_CUSTOM_URL_KEY = 'khatabook_firebase_custom_url_v2';
 
+function getUserCloudVaultIdKey() {
+  const prefix = getUserPrefix();
+  return prefix ? `khatabook_${prefix}cloud_vault_id` : CLOUD_VAULT_ID_KEY;
+}
+
 let autoSyncDebounceTimer = null;
 
 function getFullLedgerSnapshot() {
@@ -1594,13 +1754,13 @@ function getFullLedgerSnapshot() {
   const businessName = activeBiz ? activeBiz.name : (localStorage.getItem(BUSINESS_NAME_KEY) || 'My Business');
   const bizPhone = (activeBiz && activeBiz.phone) || localStorage.getItem(BIZ_PHONE_KEY) || '';
   const qrImage = (activeBiz && activeBiz.qrImage) || localStorage.getItem(QR_IMAGE_KEY) || '';
-  
+
   const allBizData = {};
   businessAccounts.forEach(b => {
     const k = getStorageKeyForBusiness(b.id);
     const raw = localStorage.getItem(k);
     if (raw) {
-      try { allBizData[b.id] = JSON.parse(raw); } catch (e) {}
+      try { allBizData[b.id] = JSON.parse(raw); } catch (e) { }
     }
   });
 
@@ -1626,12 +1786,18 @@ function applyFullLedgerSnapshot(data) {
 
   if (Array.isArray(data.businessAccounts) && data.businessAccounts.length > 0) {
     businessAccounts = data.businessAccounts;
-    localStorage.setItem(BUSINESSES_LIST_KEY, JSON.stringify(businessAccounts));
+    localStorage.setItem(getBusinessesListKey(), JSON.stringify(businessAccounts));
+    if (!getUserPrefix()) {
+      localStorage.setItem(BUSINESSES_LIST_KEY, JSON.stringify(businessAccounts));
+    }
   }
 
   if (data.activeBusinessId) {
     activeBusinessId = data.activeBusinessId;
-    localStorage.setItem(ACTIVE_BIZ_ID_KEY, activeBusinessId);
+    localStorage.setItem(getActiveBizIdKey(), activeBusinessId);
+    if (!getUserPrefix()) {
+      localStorage.setItem(ACTIVE_BIZ_ID_KEY, activeBusinessId);
+    }
   }
 
   if (data.allBizData && typeof data.allBizData === 'object') {
@@ -1674,10 +1840,12 @@ async function performCloudBackup(isAuto = false) {
   let pin = pinInput ? pinInput.value.trim() : '';
 
   if (!phone) {
-    phone = (localStorage.getItem(CLOUD_PHONE_KEY) || '').replace(/\D/g, '');
+    phone = getActiveUserPhone() || (localStorage.getItem(CLOUD_PHONE_KEY) || '').replace(/\D/g, '');
   }
   if (!pin) {
-    pin = localStorage.getItem(CLOUD_PIN_KEY) || '1234';
+    const registry = getUsersRegistry();
+    const currUser = registry.find(u => u.phone === phone);
+    pin = (currUser && currUser.pin) || localStorage.getItem(CLOUD_PIN_KEY) || '1234';
   }
 
   if (!phone || phone.length < 10) {
@@ -1695,7 +1863,7 @@ async function performCloudBackup(isAuto = false) {
   const customFirebase = (localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '').trim().replace(/\/$/, '');
 
   try {
-    let cloudVaultId = localStorage.getItem(CLOUD_VAULT_ID_KEY);
+    let cloudVaultId = localStorage.getItem(getUserCloudVaultIdKey()) || localStorage.getItem(CLOUD_VAULT_ID_KEY);
 
     if (customFirebase) {
       const fbUrl = `${customFirebase}/vaults/${phone}.json`;
@@ -1737,6 +1905,14 @@ async function performCloudBackup(isAuto = false) {
         const resJson = await res.json();
         cloudVaultId = resJson.id;
         localStorage.setItem(CLOUD_VAULT_ID_KEY, cloudVaultId);
+        localStorage.setItem(getUserCloudVaultIdKey(), cloudVaultId);
+      }
+
+      // Always map phone -> cloudVaultId in Global KeyValue Registry
+      if (cloudVaultId && phone) {
+        fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${GLOBAL_REGISTRY_TOKEN}/phone_${phone}/${cloudVaultId}`, {
+          method: 'POST'
+        }).catch(e => console.warn('KeyValue registry update failed:', e));
       }
     }
 
@@ -1785,11 +1961,13 @@ async function performCloudRestore(closeModalCallback) {
   let pin = pinInput ? pinInput.value.trim() : '';
 
   if (!phone) {
-    phone = (localStorage.getItem(CLOUD_PHONE_KEY) || '').replace(/\D/g, '');
+    phone = getActiveUserPhone() || (localStorage.getItem(CLOUD_PHONE_KEY) || '').replace(/\D/g, '');
     if (phoneInput) phoneInput.value = phone;
   }
   if (!pin) {
-    pin = localStorage.getItem(CLOUD_PIN_KEY) || '';
+    const registry = getUsersRegistry();
+    const currUser = registry.find(u => u.phone === phone);
+    pin = (currUser && currUser.pin) || localStorage.getItem(CLOUD_PIN_KEY) || '';
     if (pinInput) pinInput.value = pin;
   }
 
@@ -1804,7 +1982,7 @@ async function performCloudRestore(closeModalCallback) {
   if (statusText) statusText.textContent = 'Fetching from Cloud...';
 
   try {
-    let cloudVaultId = localStorage.getItem(CLOUD_VAULT_ID_KEY);
+    let cloudVaultId = localStorage.getItem(getUserCloudVaultIdKey()) || localStorage.getItem(CLOUD_VAULT_ID_KEY);
     const customFirebase = (localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '').trim().replace(/\/$/, '');
 
     let retrievedData = null;
@@ -1817,8 +1995,26 @@ async function performCloudRestore(closeModalCallback) {
       if (!json || !json.snapshot) throw new Error('No ledger found for this mobile number on Firebase');
       retrievedData = json.snapshot;
     } else {
+      // If we don't have a local vault ID, automatically lookup from KeyValue registry
+      if (!cloudVaultId && phone) {
+        try {
+          const lookupRes = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${GLOBAL_REGISTRY_TOKEN}/phone_${phone}`);
+          if (lookupRes.ok) {
+            const rawId = await lookupRes.text();
+            const cleanId = rawId ? rawId.trim().replace(/^"|"$/g, '') : '';
+            if (cleanId && cleanId !== 'null' && cleanId.length > 5) {
+              cloudVaultId = cleanId;
+              localStorage.setItem(getUserCloudVaultIdKey(), cloudVaultId);
+              localStorage.setItem(CLOUD_VAULT_ID_KEY, cloudVaultId);
+            }
+          }
+        } catch (lookupErr) {
+          console.warn('KeyValue lookup error:', lookupErr);
+        }
+      }
+
       if (!cloudVaultId) {
-        const manualId = prompt('Enter your Cloud Vault Key (or press OK if you have this device linked):');
+        const manualId = prompt('Enter your Cloud Vault Key (or press OK to cancel):');
         if (manualId && manualId.trim()) {
           cloudVaultId = manualId.trim();
           localStorage.setItem(CLOUD_VAULT_ID_KEY, cloudVaultId);
@@ -1826,11 +2022,11 @@ async function performCloudRestore(closeModalCallback) {
       }
 
       if (!cloudVaultId) {
-        throw new Error('Please enter your Cloud Vault Key or Firebase URL.');
+        throw new Error('No cloud ledger found for mobile number +91 ' + phone);
       }
 
       const res = await fetch(`https://api.restful-api.dev/objects/${cloudVaultId}`);
-      if (!res.ok) throw new Error('Cloud Vault record not found. Check your Key.');
+      if (!res.ok) throw new Error('Cloud Vault record not found. Server status: ' + res.status);
       const json = await res.json();
       if (!json || !json.data || !json.data.payload) {
         throw new Error('Invalid Cloud Vault payload');
@@ -1846,7 +2042,7 @@ async function performCloudRestore(closeModalCallback) {
       closeModalCallback();
     }
 
-    showToast(`Cloud Restore Successful! Restored ${customers.length} customer records.`, 'success');
+    showToast(`🎉 Cloud Restore Successful! Restored ${customers.length} customer records.`, 'success');
   } catch (err) {
     console.error('Cloud Restore failed:', err);
     if (statusDot) statusDot.className = 'status-pulse-dot error';
@@ -1858,7 +2054,7 @@ async function performCloudRestore(closeModalCallback) {
 // Debounced auto-sync whenever user saves data
 function triggerAutoCloudSync() {
   const isAutoEnabled = localStorage.getItem(CLOUD_AUTOSYNC_KEY) !== 'false';
-  const savedPhone = localStorage.getItem(CLOUD_PHONE_KEY);
+  const savedPhone = getActiveUserPhone() || localStorage.getItem(CLOUD_PHONE_KEY);
   if (!isAutoEnabled || !savedPhone) return;
 
   clearTimeout(autoSyncDebounceTimer);
@@ -2044,7 +2240,7 @@ function initCloudVaultSync(openBackupModal, closeBackupModal) {
 }
 
 // Global print for overall ledger report
-window.printGeneralReport = function() {
+window.printGeneralReport = function () {
   prepareGeneralLedgerPrintable();
   document.body.classList.remove('printing-customer');
   document.body.classList.add('printing-report');
@@ -2055,7 +2251,7 @@ window.printGeneralReport = function() {
 };
 
 // Global print for customer card
-window.printCustomerFromCard = function(customerId) {
+window.printCustomerFromCard = function (customerId) {
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
   prepareCustomerPrintableStatement(cust);
@@ -2386,9 +2582,9 @@ function renderCustomersPageView() {
   // Filter
   let filtered = customers.filter(c => {
     if (!query) return true;
-    return c.name.toLowerCase().includes(query) || 
-           c.phone.includes(query) || 
-           (c.address && c.address.toLowerCase().includes(query));
+    return c.name.toLowerCase().includes(query) ||
+      c.phone.includes(query) ||
+      (c.address && c.address.toLowerCase().includes(query));
   });
 
   // Sort alphabetically by name
@@ -2425,7 +2621,7 @@ function renderCustomersPageView() {
     groups[letter].forEach(cust => {
       const initial = getInitials(cust.name);
       const balInfo = calculateCustomerBalance(cust);
-      
+
       let balBadgeClass = 'badge-settled';
       let balText = 'Settled';
       if (balInfo.status === 'receive') {
@@ -2525,13 +2721,13 @@ function renderScreenCustomerList() {
 }
 
 // Select Customer from Screen 1
-window.selectCustomerFromScreen = function(id) {
+window.selectCustomerFromScreen = function (id) {
   document.getElementById('customerSearchScreen').classList.remove('active');
   openCustomerDetail(id);
 };
 
 // Global Close Customer Detail Modal
-window.closeCustomerDetailModal = function() {
+window.closeCustomerDetailModal = function () {
   const detailModal = document.getElementById('customerDetailModal');
   if (detailModal) {
     detailModal.classList.remove('active');
@@ -2545,14 +2741,14 @@ window.closeCustomerDetailModal = function() {
 };
 
 // Global Go Back to Dashboard
-window.goBackToDashboard = function() {
+window.goBackToDashboard = function () {
   window.location.hash = 'dashboard';
   switchView('dashboard');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 // Open Customer Detail Modal
-window.openCustomerDetail = function(customerId) {
+window.openCustomerDetail = function (customerId) {
   selectedCustomerId = customerId;
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
@@ -2568,7 +2764,7 @@ window.openCustomerDetail = function(customerId) {
     if (!window.history.state || window.history.state.modal !== 'customerDetail') {
       window.history.pushState({ modal: 'customerDetail', customerId }, '');
     }
-  } catch (e) {}
+  } catch (e) { }
 };
 
 // Update Customer Detail View
@@ -2674,7 +2870,7 @@ function updateCustomerDetailView(cust) {
 }
 
 // Delete Single Transaction Entry
-window.deleteTxn = function(customerId, txnId) {
+window.deleteTxn = function (customerId, txnId) {
   if (!confirm('Are you sure you want to delete this transaction entry?')) return;
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
@@ -2687,7 +2883,7 @@ window.deleteTxn = function(customerId, txnId) {
 };
 
 // WhatsApp Reminder Generator
-window.sendWhatsAppReminder = function(customerId) {
+window.sendWhatsAppReminder = function (customerId) {
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
 
@@ -2727,8 +2923,8 @@ function renderLedgerReport() {
   const now = new Date();
   document.getElementById('reportDateTime').textContent = `Generated on: ${formatDateDMY(now)} at ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
 
-  const activeCustomers = partyFilter === 'all' 
-    ? customers 
+  const activeCustomers = partyFilter === 'all'
+    ? customers
     : customers.filter(c => c.id === partyFilter);
 
   // Compute KPI totals
@@ -2848,8 +3044,8 @@ function prepareGeneralLedgerPrintable() {
   document.getElementById('printLedgerBusinessTitle').textContent = businessName;
   document.getElementById('printLedgerGeneratedDate').textContent = `Statement Date: ${formatDateDMY(now)}`;
 
-  const activeCustomers = partyFilter === 'all' 
-    ? customers 
+  const activeCustomers = partyFilter === 'all'
+    ? customers
     : customers.filter(c => c.id === partyFilter);
 
   const scopeLabel = partyFilter === 'all'
@@ -2960,7 +3156,7 @@ function showToast(message, type = 'info') {
 // Utility: HTML Sanitizer
 function escapeHTML(str) {
   if (!str) return '';
-  return str.replace(/[&<>'"]/g, 
+  return str.replace(/[&<>'"]/g,
     tag => ({
       '&': '&amp;',
       '<': '&lt;',
@@ -3101,7 +3297,7 @@ function setLanguage(lang) {
 
 function applyLanguage(lang) {
   const dict = I18N[lang] || I18N.en;
-  
+
   const searchInput = document.getElementById('globalSearchInput');
   if (searchInput) searchInput.placeholder = dict.searchPlaceholder;
 
@@ -3212,7 +3408,7 @@ function initBillUpload() {
   }
 }
 
-window.openLightbox = function(txnId) {
+window.openLightbox = function (txnId) {
   let photo = null;
   for (const c of customers) {
     const t = (c.transactions || []).find(x => x.id === txnId);
@@ -3320,7 +3516,7 @@ function initBusinessSettings() {
 }
 
 // 5. PAYMENT QR CODE MODAL (Custom QR Code Image Upload)
-window.openUpiQrModal = function(customerId) {
+window.openUpiQrModal = function (customerId) {
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
 
@@ -3432,7 +3628,7 @@ function initUpiModalControls() {
 }
 
 // 6. SMART WHATSAPP REMINDER MODAL
-window.openWhatsappModal = function(customerId) {
+window.openWhatsappModal = function (customerId) {
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
   waSelectedCustomer = cust;
@@ -3678,7 +3874,7 @@ function drawCashflowChart() {
 // 8. SET / UPDATE PAYMENT DUE DATE MODAL
 let dueDateCustomerId = null;
 
-window.openSetDueDateModal = function(customerId) {
+window.openSetDueDateModal = function (customerId) {
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
   dueDateCustomerId = customerId;
@@ -3782,7 +3978,7 @@ function initDueDateModal() {
 // ==========================================================================
 // 9. MULTI-BUSINESS & ACCOUNT SWITCHER LOGIC (Office, Home, etc.)
 // ==========================================================================
-window.openSwitchBusinessModal = function() {
+window.openSwitchBusinessModal = function () {
   if (typeof window.closeMobileSidebar === 'function') {
     window.closeMobileSidebar();
   }
@@ -3857,7 +4053,7 @@ function renderSwitchBusinessList() {
   }).join('');
 }
 
-window.switchActiveBusiness = function(targetBizId) {
+window.switchActiveBusiness = function (targetBizId) {
   if (targetBizId === activeBusinessId) {
     const modal = document.getElementById('switchBusinessModal');
     if (modal) modal.classList.remove('active');
@@ -3914,7 +4110,7 @@ window.switchActiveBusiness = function(targetBizId) {
   showToast(`Switched to "${targetBiz.name}" account!`, 'success');
 };
 
-window.createNewBusinessAccount = function(name, type) {
+window.createNewBusinessAccount = function (name, type) {
   const cleanName = (name || '').trim();
   if (!cleanName) {
     showToast('Please enter an account name', 'danger');
@@ -3946,7 +4142,7 @@ window.createNewBusinessAccount = function(name, type) {
   showToast(`Created and switched to "${cleanName}"!`, 'success');
 };
 
-window.deleteBusinessAccount = function(bizId, event) {
+window.deleteBusinessAccount = function (bizId, event) {
   if (event) event.stopPropagation();
   if (businessAccounts.length <= 1) {
     showToast('You must keep at least one account.', 'danger');
