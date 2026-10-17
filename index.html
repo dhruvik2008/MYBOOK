@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>My Book - Digital Ledger & Udhar Jama</title>
   <meta name="description" content="Manage your credit, debit, customers, and ledger balances seamlessly.">
   <!-- iOS Safari Web App & PWA Meta Tags -->
@@ -48,7 +49,23 @@
       </div>
 
       <div class="pin-lock-body">
-        <p class="pin-instruction">Enter 4-Digit Security PIN</p>
+        <!-- Saved Profiles Quick Switch Pills (e.g. User 1, User 2) -->
+        <div class="saved-users-pill-row" id="savedUsersPills" style="display: none;"></div>
+
+        <!-- Mobile Number Input -->
+        <div class="login-phone-group">
+          <label for="loginPhoneInput" class="login-phone-label">
+            <span><i class="ri-phone-line"></i> Mobile Number</span>
+            <span id="userStatusTag" class="user-status-tag">Enter 10 Digits</span>
+          </label>
+          <div class="login-phone-input-wrap">
+            <span class="phone-country-prefix">+91</span>
+            <input type="tel" id="loginPhoneInput" maxlength="10" placeholder="10-digit mobile" inputmode="numeric"
+              pattern="[0-9]*" autocomplete="tel">
+          </div>
+        </div>
+
+        <p class="pin-instruction" id="pinInstructionLabel">Enter 4-Digit Security PIN</p>
 
         <!-- PIN Dots Indicator -->
         <div class="pin-dots-container" id="pinDotsContainer">
@@ -86,7 +103,8 @@
           <i class="ri-shield-check-line"></i> Protected &bull; Enter Security PIN to Unlock
         </div>
         <div style="margin-top: 10px;">
-          <button type="button" class="pin-restore-link" id="pinScreenRestoreBtn" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #c7d2fe; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 10px; transition: all 0.2s ease;">
+          <button type="button" class="pin-restore-link" id="pinScreenRestoreBtn"
+            style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #c7d2fe; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 10px; transition: all 0.2s ease;">
             <i class="ri-cloud-download-line"></i> Restore from Cloud
           </button>
         </div>
@@ -110,7 +128,8 @@
         </button>
       </div>
 
-      <div class="business-card" id="sidebarBusinessCard" style="cursor: pointer;" title="Click to Switch or Add Account (Office, Home, etc.)">
+      <div class="business-card" id="sidebarBusinessCard" style="cursor: pointer;"
+        title="Click to Switch or Add Account (Office, Home, etc.)">
         <div class="business-avatar" id="businessAvatarIcon">
           <i class="ri-store-2-line"></i>
         </div>
@@ -150,6 +169,22 @@
           <span>Lock App</span>
         </a>
       </nav>
+
+      <!-- Currently Logged In User Profile & Switch Button -->
+      <div class="user-session-card" id="sidebarUserSessionCard">
+        <div class="user-session-left">
+          <div class="user-session-avatar">
+            <i class="ri-user-3-fill"></i>
+          </div>
+          <div class="user-session-info">
+            <span class="user-session-phone" id="sidebarUserPhone">+91 ---</span>
+            <small class="user-session-label"><i class="ri-checkbox-circle-fill"></i> Logged In</small>
+          </div>
+        </div>
+        <button type="button" class="btn-switch-user" id="sidebarSwitchUserBtn" title="Switch User / Logout">
+          <i class="ri-logout-box-r-line"></i>
+        </button>
+      </div>
 
       <div class="sidebar-footer">
         <div class="sync-status">
@@ -202,11 +237,17 @@
               <option value="hi">हिन्दी</option>
             </select>
           </div>
+          <!-- Switch User Button in Header -->
+          <button class="btn btn-outline" id="headerSwitchUserBtn" title="Switch User / Logout">
+            <i class="ri-user-shared-line"></i>
+            <span id="headerUserPhoneSpan">Switch User</span>
+          </button>
           <button class="btn btn-outline" id="lockAppHeaderBtn" title="Lock App with PIN">
             <i class="ri-lock-2-line"></i>
             <span>Lock</span>
           </button>
-          <button class="btn btn-outline" id="headerCloudSyncBtn" title="Sync with Cloud (Pull updates from User 2 / Partner)">
+          <button class="btn btn-outline" id="headerCloudSyncBtn"
+            title="Sync with Cloud (Pull updates from User 2 / Partner)">
             <i class="ri-refresh-line" id="headerCloudSyncIcon"></i>
             <span>Sync Cloud</span>
           </button>
@@ -318,11 +359,13 @@
             <h4>No Customers Yet</h4>
             <p>Your ledger is completely empty. Start tracking your credits and debits by adding your first customer.
             </p>
-            <div class="empty-state-actions" style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
+            <div class="empty-state-actions"
+              style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
               <button class="btn btn-primary" id="emptyStateAddBtn">
                 <i class="ri-add-line"></i> Add Customer
               </button>
-              <button class="btn btn-secondary" id="emptyStateRestoreCloudBtn" style="background: rgba(99, 102, 241, 0.12); color: #4f46e5; border: 1.5px solid rgba(99, 102, 241, 0.3);">
+              <button class="btn btn-secondary" id="emptyStateRestoreCloudBtn"
+                style="background: rgba(99, 102, 241, 0.12); color: #4f46e5; border: 1.5px solid rgba(99, 102, 241, 0.3);">
                 <i class="ri-cloud-download-line"></i> Restore from Cloud
               </button>
             </div>
@@ -336,12 +379,14 @@
       <div class="customers-page-container" id="customersPageView" style="display: none;">
         <!-- Back to Dashboard Navigation Bar -->
         <div class="page-top-nav-bar">
-          <button type="button" class="btn-back-dashboard" id="btnBackToDashboardFromCust" onclick="goBackToDashboard()" title="Back to Dashboard">
+          <button type="button" class="btn-back-dashboard" id="btnBackToDashboardFromCust" onclick="goBackToDashboard()"
+            title="Back to Dashboard">
             <i class="ri-arrow-left-line"></i>
             <span>Back to Dashboard</span>
           </button>
           <div class="page-breadcrumb">
-            <a href="#dashboard" onclick="goBackToDashboard(); return false;" class="crumb-link"><i class="ri-home-4-line"></i> Dashboard</a>
+            <a href="#dashboard" onclick="goBackToDashboard(); return false;" class="crumb-link"><i
+                class="ri-home-4-line"></i> Dashboard</a>
             <span class="sep">/</span>
             <span class="active-crumb">Customers</span>
           </div>
@@ -394,12 +439,14 @@
       <div class="analytics-page-container" id="analyticsPageView" style="display: none;">
         <!-- Back to Dashboard Navigation Bar -->
         <div class="page-top-nav-bar">
-          <button type="button" class="btn-back-dashboard" id="btnBackToDashboardFromAnalytics" onclick="goBackToDashboard()" title="Back to Dashboard">
+          <button type="button" class="btn-back-dashboard" id="btnBackToDashboardFromAnalytics"
+            onclick="goBackToDashboard()" title="Back to Dashboard">
             <i class="ri-arrow-left-line"></i>
             <span>Back to Dashboard</span>
           </button>
           <div class="page-breadcrumb">
-            <a href="#dashboard" onclick="goBackToDashboard(); return false;" class="crumb-link"><i class="ri-home-4-line"></i> Dashboard</a>
+            <a href="#dashboard" onclick="goBackToDashboard(); return false;" class="crumb-link"><i
+                class="ri-home-4-line"></i> Dashboard</a>
             <span class="sep">/</span>
             <span class="active-crumb">Analytics</span>
           </div>
@@ -656,7 +703,8 @@
     <div class="mobile-window modal-wide">
       <div class="screen-header-blue detail-header">
         <div class="detail-header-left">
-          <button class="btn-icon-white btn-back-modal" id="closeDetailModalBtn" onclick="closeCustomerDetailModal()" title="Back" aria-label="Back">
+          <button class="btn-icon-white btn-back-modal" id="closeDetailModalBtn" onclick="closeCustomerDetailModal()"
+            title="Back" aria-label="Back">
             <i class="ri-arrow-left-line"></i>
           </button>
           <div class="customer-badge-info">
@@ -1190,7 +1238,8 @@
               </div>
 
               <!-- 2 Users / 2 Phones Sharing Box -->
-              <div class="cloud-partner-share-box" style="background: #f8fafc; border: 1.5px dashed #c7d2fe; border-radius: 12px; padding: 12px 14px; margin-top: 6px;">
+              <div class="cloud-partner-share-box"
+                style="background: #f8fafc; border: 1.5px dashed #c7d2fe; border-radius: 12px; padding: 12px 14px; margin-top: 6px;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                   <i class="ri-user-shared-line" style="color: #4f46e5; font-size: 18px;"></i>
                   <strong style="font-size: 13px; color: #1e1b4b;">2 Users / 2 Phones Live Sync</strong>
@@ -1198,7 +1247,8 @@
                 <p style="font-size: 11.5px; color: #475569; line-height: 1.45; margin-bottom: 10px;">
                   To use this ledger on a second phone (User 2), send your partner the connect link via WhatsApp:
                 </p>
-                <button type="button" class="btn-safety-wa" id="btnShareWithPartner" style="background: #4f46e5; color: #ffffff; border: none; font-size: 12px; height: 38px;">
+                <button type="button" class="btn-safety-wa" id="btnShareWithPartner"
+                  style="background: #4f46e5; color: #ffffff; border: none; font-size: 12px; height: 38px;">
                   <i class="ri-whatsapp-line"></i> Send Connect Link to User 2 via WhatsApp
                 </button>
               </div>
@@ -1215,7 +1265,8 @@
                 <summary><i class="ri-settings-4-line"></i> Advanced: Custom Firebase Realtime Database URL</summary>
                 <div class="firebase-config-inner">
                   <p>Optional: Connect your own private Google Firebase project database:</p>
-                  <input type="url" id="customFirebaseUrlInput" placeholder="https://your-project-default-rtdb.firebaseio.com">
+                  <input type="url" id="customFirebaseUrlInput"
+                    placeholder="https://your-project-default-rtdb.firebaseio.com">
                   <button type="button" class="btn-save-firebase" id="btnSaveFirebaseUrl">Save Firebase</button>
                 </div>
               </details>
@@ -1440,7 +1491,8 @@
           <div class="outlined-input-wrap">
             <input type="date" id="custDueDateInput" class="custom-date-input">
           </div>
-          <small class="helper-text">If customer does not pay by this date, it will automatically show as <b>Overdue</b>.</small>
+          <small class="helper-text">If customer does not pay by this date, it will automatically show as
+            <b>Overdue</b>.</small>
         </div>
 
         <!-- Quick Shortcut Pills -->
