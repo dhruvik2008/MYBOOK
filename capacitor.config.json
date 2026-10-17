@@ -1,0 +1,12 @@
+{
+  "appId": "com.mybook.ledger",
+  "appName": "My Book",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "ios": {
+    "contentInset": "always",
+    "allowsLinkPreview": false,
+    "scrollEnabled": true,
+    "backgroundColor": "#090d16"
+  }
+}
