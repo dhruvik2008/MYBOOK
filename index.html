@@ -334,10 +334,17 @@
            CUSTOMERS FULL-PAGE VIEW (EXACTLY MATCHING IMAGE 2)
            ========================================================================= -->
       <div class="customers-page-container" id="customersPageView" style="display: none;">
-        <!-- Breadcrumb navigation -->
-        <div class="page-breadcrumb">
-          <span>Home</span> <span class="sep">/</span> <span>Apps</span> <span class="sep">/</span> <span
-            class="active-crumb">Customers</span>
+        <!-- Back to Dashboard Navigation Bar -->
+        <div class="page-top-nav-bar">
+          <button type="button" class="btn-back-dashboard" id="btnBackToDashboardFromCust" onclick="goBackToDashboard()" title="Back to Dashboard">
+            <i class="ri-arrow-left-line"></i>
+            <span>Back to Dashboard</span>
+          </button>
+          <div class="page-breadcrumb">
+            <a href="#dashboard" onclick="goBackToDashboard(); return false;" class="crumb-link"><i class="ri-home-4-line"></i> Dashboard</a>
+            <span class="sep">/</span>
+            <span class="active-crumb">Customers</span>
+          </div>
         </div>
 
         <!-- Heading & Count -->
@@ -385,9 +392,17 @@
            FINANCIAL ANALYTICS FULL-PAGE VIEW
            ========================================================================= -->
       <div class="analytics-page-container" id="analyticsPageView" style="display: none;">
-        <div class="page-breadcrumb">
-          <span>Home</span> <span class="sep">/</span> <span>Apps</span> <span class="sep">/</span> <span
-            class="active-crumb">Financial Analytics</span>
+        <!-- Back to Dashboard Navigation Bar -->
+        <div class="page-top-nav-bar">
+          <button type="button" class="btn-back-dashboard" id="btnBackToDashboardFromAnalytics" onclick="goBackToDashboard()" title="Back to Dashboard">
+            <i class="ri-arrow-left-line"></i>
+            <span>Back to Dashboard</span>
+          </button>
+          <div class="page-breadcrumb">
+            <a href="#dashboard" onclick="goBackToDashboard(); return false;" class="crumb-link"><i class="ri-home-4-line"></i> Dashboard</a>
+            <span class="sep">/</span>
+            <span class="active-crumb">Analytics</span>
+          </div>
         </div>
 
         <div class="page-header-row">
@@ -641,7 +656,7 @@
     <div class="mobile-window modal-wide">
       <div class="screen-header-blue detail-header">
         <div class="detail-header-left">
-          <button class="btn-icon-white" id="closeDetailModalBtn" title="Back">
+          <button class="btn-icon-white btn-back-modal" id="closeDetailModalBtn" onclick="closeCustomerDetailModal()" title="Back" aria-label="Back">
             <i class="ri-arrow-left-line"></i>
           </button>
           <div class="customer-badge-info">
