@@ -1724,29 +1724,73 @@ h1, h2, h3, h4, .stat-amount, .due-amount {
    CUSTOMER DETAIL & LEDGER VIEW (MODAL 3)
    ========================================================================= */
 .detail-header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  width: 100%;
 }
 
 .detail-header-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.btn-back-modal {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+  font-size: 22px !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+  z-index: 10 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+.btn-back-modal:hover,
+.btn-back-modal:active {
+  background: rgba(255, 255, 255, 0.32) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  transform: scale(1.08) !important;
+}
+
+.customer-badge-info {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .customer-badge-info h3 {
   font-size: 17px;
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .customer-badge-info span {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .detail-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .detail-balance-banner {
@@ -2128,6 +2172,67 @@ h1, h2, h3, h4, .stat-amount, .due-amount {
   margin: 0 auto;
 }
 
+.page-top-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+}
+
+.btn-back-dashboard {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  color: #1e1b4b;
+  border: 1px solid #cbd5e1;
+  padding: 9px 18px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-family);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.btn-back-dashboard i {
+  font-size: 18px;
+  color: var(--brand-blue);
+  transition: transform 0.2s ease;
+}
+
+.btn-back-dashboard:hover {
+  background: #eef2ff;
+  border-color: #818cf8;
+  color: var(--brand-blue);
+  transform: translateX(-3px);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.15);
+}
+
+.btn-back-dashboard:hover i {
+  transform: translateX(-2px);
+}
+
+.crumb-link {
+  color: #475569;
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s ease;
+}
+
+.crumb-link:hover {
+  color: var(--brand-blue);
+  text-decoration: underline;
+}
+
 .page-breadcrumb {
   font-size: 13px;
   color: #64748b;
@@ -2466,6 +2571,10 @@ h1, h2, h3, h4, .stat-amount, .due-amount {
     height: 100%;
     border-radius: 0;
     padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
+
+  #toggleFsDetailBtn {
+    display: none !important;
   }
 
   .screen-header-blue {
