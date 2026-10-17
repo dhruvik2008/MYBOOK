@@ -60,10 +60,51 @@ document.addEventListener('DOMContentLoaded', () => {
   renderDashboard();
 });
 
+const USERS_REGISTRY_KEY = 'mybook_users_registry_v2';
+const ACTIVE_USER_PHONE_KEY = 'mybook_active_user_phone_v2';
+const SESSION_LOCK_KEY = 'mybook_session_unlocked_v2';
+let currentActivePhone = localStorage.getItem(ACTIVE_USER_PHONE_KEY) || '';
+
+// User registry and partitioned storage helpers
+function getUsersRegistry() {
+  try {
+    const reg = localStorage.getItem(USERS_REGISTRY_KEY);
+    if (reg) {
+      const parsed = JSON.parse(reg);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveUsersRegistry(list) {
+  localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(list));
+}
+
+function getActiveUserPhone() {
+  return currentActivePhone || localStorage.getItem(ACTIVE_USER_PHONE_KEY) || '';
+}
+
+function getUserPrefix() {
+  const phone = getActiveUserPhone();
+  return phone ? `u_${phone}_` : '';
+}
+
 // Helper: Get storage key for specific business
 function getStorageKeyForBusiness(bizId) {
-  if (!bizId || bizId === 'biz_default') return STORAGE_KEY;
-  return `khatabook_parties_${bizId}`;
+  const prefix = getUserPrefix();
+  if (!bizId || bizId === 'biz_default') return `khatabook_${prefix}parties_db_v2`;
+  return `khatabook_${prefix}parties_${bizId}`;
+}
+
+function getBusinessesListKey() {
+  const prefix = getUserPrefix();
+  return prefix ? `khatabook_${prefix}businesses_list_v2` : BUSINESSES_LIST_KEY;
+}
+
+function getActiveBizIdKey() {
+  const prefix = getUserPrefix();
+  return prefix ? `khatabook_${prefix}active_biz_id_v2` : ACTIVE_BIZ_ID_KEY;
 }
 
 // Helper: Get currently active business account
@@ -77,19 +118,22 @@ function getActiveBusiness() {
 
 // Helper: Persist business accounts list & active state
 function saveBusinessesList() {
-  localStorage.setItem(BUSINESSES_LIST_KEY, JSON.stringify(businessAccounts));
-  localStorage.setItem(ACTIVE_BIZ_ID_KEY, activeBusinessId);
+  const listKey = getBusinessesListKey();
+  const activeKey = getActiveBizIdKey();
+  localStorage.setItem(listKey, JSON.stringify(businessAccounts));
+  localStorage.setItem(activeKey, activeBusinessId);
   const activeBiz = getActiveBusiness();
   if (activeBiz) {
-    localStorage.setItem(BUSINESS_NAME_KEY, activeBiz.name);
-    if (activeBiz.phone) localStorage.setItem(BIZ_PHONE_KEY, activeBiz.phone);
-    else localStorage.removeItem(BIZ_PHONE_KEY);
+    const prefix = getUserPrefix();
+    localStorage.setItem(`khatabook_${prefix}biz_name`, activeBiz.name);
+    if (activeBiz.phone) localStorage.setItem(`khatabook_${prefix}biz_phone`, activeBiz.phone);
+    else localStorage.removeItem(`khatabook_${prefix}biz_phone`);
 
-    if (activeBiz.address) localStorage.setItem(BIZ_ADDR_KEY, activeBiz.address);
-    else localStorage.removeItem(BIZ_ADDR_KEY);
+    if (activeBiz.address) localStorage.setItem(`khatabook_${prefix}biz_addr`, activeBiz.address);
+    else localStorage.removeItem(`khatabook_${prefix}biz_addr`);
 
-    if (activeBiz.qrImage) localStorage.setItem(QR_IMAGE_KEY, activeBiz.qrImage);
-    else localStorage.removeItem(QR_IMAGE_KEY);
+    if (activeBiz.qrImage) localStorage.setItem(`khatabook_${prefix}qr_img`, activeBiz.qrImage);
+    else localStorage.removeItem(`khatabook_${prefix}qr_img`);
   }
 }
 
@@ -112,8 +156,22 @@ function updateActiveBusinessUI() {
 
 // Load persistent data
 function loadData() {
-  // 1. Initialize businesses list (with seamless migration of existing single business)
-  const storedList = localStorage.getItem(BUSINESSES_LIST_KEY);
+  const phone = getActiveUserPhone();
+  const listKey = getBusinessesListKey();
+  let storedList = localStorage.getItem(listKey);
+
+  // Migration for first registered user if previous legacy data exists
+  if (!storedList) {
+    const registry = getUsersRegistry();
+    if (registry.length <= 1) {
+      const legacyList = localStorage.getItem(BUSINESSES_LIST_KEY);
+      if (legacyList) {
+        storedList = legacyList;
+        localStorage.setItem(listKey, legacyList);
+      }
+    }
+  }
+
   if (storedList) {
     try {
       businessAccounts = JSON.parse(storedList);
@@ -126,14 +184,15 @@ function loadData() {
   }
 
   if (businessAccounts.length === 0) {
-    const currentBizName = localStorage.getItem(BUSINESS_NAME_KEY) || 'Office';
-    const currentPhone = localStorage.getItem(BIZ_PHONE_KEY) || '';
-    const currentAddr = localStorage.getItem(BIZ_ADDR_KEY) || '';
-    const currentQr = localStorage.getItem(QR_IMAGE_KEY) || '';
+    const prefix = getUserPrefix();
+    const currentBizName = localStorage.getItem(`khatabook_${prefix}biz_name`) || (phone ? `Office` : 'Office');
+    const currentPhone = localStorage.getItem(`khatabook_${prefix}biz_phone`) || phone || '';
+    const currentAddr = localStorage.getItem(`khatabook_${prefix}biz_addr`) || '';
+    const currentQr = localStorage.getItem(`khatabook_${prefix}qr_img`) || '';
     businessAccounts = [{
       id: 'biz_default',
       name: currentBizName,
-      type: currentBizName.toLowerCase().includes('home') ? 'Home' : 'Office',
+      type: 'Office',
       phone: currentPhone,
       address: currentAddr,
       qrImage: currentQr,
@@ -142,7 +201,7 @@ function loadData() {
     activeBusinessId = 'biz_default';
     saveBusinessesList();
   } else {
-    activeBusinessId = localStorage.getItem(ACTIVE_BIZ_ID_KEY) || businessAccounts[0].id;
+    activeBusinessId = localStorage.getItem(getActiveBizIdKey()) || businessAccounts[0].id;
     if (!businessAccounts.some(b => b.id === activeBusinessId)) {
       activeBusinessId = businessAccounts[0].id;
     }
@@ -150,7 +209,20 @@ function loadData() {
 
   // 2. Load customers for active business
   const currentKey = getStorageKeyForBusiness(activeBusinessId);
-  const storedCustomers = localStorage.getItem(currentKey);
+  let storedCustomers = localStorage.getItem(currentKey);
+
+  // Migration for first registered user if previous legacy customers exist
+  if (!storedCustomers && activeBusinessId === 'biz_default') {
+    const registry = getUsersRegistry();
+    if (registry.length <= 1) {
+      const legacyCust = localStorage.getItem(STORAGE_KEY);
+      if (legacyCust) {
+        storedCustomers = legacyCust;
+        localStorage.setItem(currentKey, legacyCust);
+      }
+    }
+  }
+
   if (storedCustomers) {
     try {
       customers = JSON.parse(storedCustomers);
@@ -164,14 +236,12 @@ function loadData() {
   }
 
   updateActiveBusinessUI();
+  updateActiveUserUI();
 }
 
 function saveData() {
   const currentKey = getStorageKeyForBusiness(activeBusinessId);
   localStorage.setItem(currentKey, JSON.stringify(customers));
-  if (activeBusinessId === 'biz_default') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(customers));
-  }
   if (typeof triggerAutoCloudSync === 'function') {
     triggerAutoCloudSync();
   }
@@ -1002,9 +1072,23 @@ function setupEventListeners() {
 
 // ==========================================================================
 // PIN LOCK SCREEN LOGIC (PIN: 2704)
-// ==========================================================================
-const APP_PIN = '2704';
-const SESSION_LOCK_KEY = 'mybook_session_unlocked_v1';
+function updateActiveUserUI() {
+  const phone = getActiveUserPhone();
+  const displayStr = phone ? `+91 ${phone}` : 'Not Logged In';
+  const sidebarEl = document.getElementById('sidebarUserPhone');
+  const headerEl = document.getElementById('headerUserPhoneSpan');
+  if (sidebarEl) sidebarEl.textContent = displayStr;
+  if (headerEl) headerEl.textContent = phone ? `${phone.slice(-4)}` : 'Switch User';
+  if (headerEl && phone) headerEl.title = `Logged in as +91 ${phone} (Tap to Switch User)`;
+
+  // Keep Cloud Vault phone in sync
+  const cloudPhone = document.getElementById('cloudPhoneInput');
+  if (cloudPhone && phone && !cloudPhone.value) {
+    cloudPhone.value = phone;
+    localStorage.setItem(CLOUD_PHONE_KEY, phone);
+  }
+}
+
 let enteredPin = '';
 
 function initPinLock() {
@@ -1020,15 +1104,137 @@ function initPinLock() {
   const pinBackspaceBtn = document.getElementById('pinBackspaceBtn');
   const lockAppHeaderBtn = document.getElementById('lockAppHeaderBtn');
   const navLockBtn = document.getElementById('navLockBtn');
+  const sidebarSwitchUserBtn = document.getElementById('sidebarSwitchUserBtn');
+  const headerSwitchUserBtn = document.getElementById('headerSwitchUserBtn');
+  const loginPhoneInput = document.getElementById('loginPhoneInput');
+  const savedUsersPills = document.getElementById('savedUsersPills');
+  const userStatusTag = document.getElementById('userStatusTag');
+  const pinInstructionLabel = document.getElementById('pinInstructionLabel');
 
   // Check if session is already unlocked
   const isUnlocked = sessionStorage.getItem(SESSION_LOCK_KEY) === 'true';
-  if (isUnlocked) {
+  const currentPhone = getActiveUserPhone();
+
+  if (isUnlocked && currentPhone) {
     pinLockScreen.classList.remove('active', 'unlocking');
+    updateActiveUserUI();
   } else {
     pinLockScreen.classList.add('active');
     pinLockScreen.classList.remove('unlocking');
-    focusPinInput();
+    setupLoginScreen();
+  }
+
+  function setupLoginScreen() {
+    renderSavedUserPills();
+    const registry = getUsersRegistry();
+    const lastPhone = currentPhone || (registry.length > 0 ? registry[registry.length - 1].phone : '');
+    if (loginPhoneInput) {
+      if (lastPhone && !loginPhoneInput.value) {
+        loginPhoneInput.value = lastPhone;
+      }
+      onPhoneInputChange();
+      if (!loginPhoneInput.value) {
+        setTimeout(() => loginPhoneInput.focus(), 200);
+      } else {
+        focusPinInput();
+      }
+    }
+  }
+
+  function renderSavedUserPills() {
+    if (!savedUsersPills) return;
+    const registry = getUsersRegistry();
+    if (registry.length === 0) {
+      savedUsersPills.style.display = 'none';
+      return;
+    }
+
+    savedUsersPills.style.display = 'flex';
+    const activePhone = loginPhoneInput ? loginPhoneInput.value.replace(/\D/g, '') : getActiveUserPhone();
+    let pillsHtml = '';
+
+    registry.forEach((u, idx) => {
+      const isCurrent = (u.phone === activePhone);
+      const label = `User ${idx + 1} (${u.phone.slice(-4)})`;
+      pillsHtml += `
+        <button type="button" class="saved-user-pill ${isCurrent ? 'active' : ''}" data-phone="${u.phone}">
+          <i class="ri-user-3-line"></i> ${label}
+        </button>
+      `;
+    });
+
+    pillsHtml += `
+      <button type="button" class="saved-user-pill" id="btnNewUserPill" style="background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4); color: #c7d2fe;">
+        <i class="ri-user-add-line"></i> + New User
+      </button>
+    `;
+
+    savedUsersPills.innerHTML = pillsHtml;
+
+    savedUsersPills.querySelectorAll('.saved-user-pill[data-phone]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ph = btn.getAttribute('data-phone');
+        if (loginPhoneInput) {
+          loginPhoneInput.value = ph;
+          onPhoneInputChange();
+          focusPinInput();
+        }
+      });
+    });
+
+    const newBtn = document.getElementById('btnNewUserPill');
+    if (newBtn) {
+      newBtn.addEventListener('click', () => {
+        if (loginPhoneInput) {
+          loginPhoneInput.value = '';
+          loginPhoneInput.focus();
+          onPhoneInputChange();
+        }
+      });
+    }
+  }
+
+  function onPhoneInputChange() {
+    if (!loginPhoneInput) return;
+    const raw = loginPhoneInput.value.replace(/\D/g, '').slice(0, 10);
+    loginPhoneInput.value = raw;
+    const registry = getUsersRegistry();
+    const user = registry.find(u => u.phone === raw);
+
+    if (raw.length === 10) {
+      if (user) {
+        if (userStatusTag) {
+          userStatusTag.textContent = 'Existing User';
+          userStatusTag.style.color = '#10b981';
+        }
+        if (pinInstructionLabel) {
+          pinInstructionLabel.textContent = `Enter 4-Digit PIN for +91 ${raw}`;
+        }
+      } else {
+        if (userStatusTag) {
+          userStatusTag.textContent = 'New Account';
+          userStatusTag.style.color = '#818cf8';
+        }
+        if (pinInstructionLabel) {
+          pinInstructionLabel.textContent = `Set 4-Digit Security PIN (First Time)`;
+        }
+      }
+    } else {
+      if (userStatusTag) {
+        userStatusTag.textContent = `${raw.length}/10 Digits`;
+        userStatusTag.style.color = '#cbd5e1';
+      }
+      if (pinInstructionLabel) {
+        pinInstructionLabel.textContent = 'Enter 4-Digit Security PIN';
+      }
+    }
+
+    enteredPin = '';
+    updateDots();
+  }
+
+  if (loginPhoneInput) {
+    loginPhoneInput.addEventListener('input', onPhoneInputChange);
   }
 
   function focusPinInput() {
@@ -1073,47 +1279,89 @@ function initPinLock() {
   }
 
   function validatePin() {
-    if (enteredPin === APP_PIN) {
-      // Success! Correct PIN 2704
-      pinDots.forEach(dot => {
-        dot.classList.add('success');
-      });
-      sessionStorage.setItem(SESSION_LOCK_KEY, 'true');
-      if (pinErrorMsg) {
-        pinErrorMsg.style.color = '#10b981';
-        pinErrorMsg.textContent = 'PIN Verified! Unlocking...';
-      }
-
-      setTimeout(() => {
-        pinLockScreen.classList.add('unlocking');
-        setTimeout(() => {
-          pinLockScreen.classList.remove('active', 'unlocking');
-          enteredPin = '';
-          updateDots();
-          if (pinErrorMsg) {
-            pinErrorMsg.style.color = '';
-            pinErrorMsg.textContent = '';
-          }
-          showToast('Welcome to My Book! Unlocked successfully.', 'success');
-        }, 350);
-      }, 250);
-    } else {
-      // Error: Wrong PIN!
-      pinDots.forEach(dot => {
-        dot.classList.add('error');
-      });
+    const phone = loginPhoneInput ? loginPhoneInput.value.replace(/\D/g, '') : '';
+    if (phone.length < 10) {
+      pinDots.forEach(dot => dot.classList.add('error'));
       if (pinDotsContainer) pinDotsContainer.classList.add('shake');
       if (pinErrorMsg) {
         pinErrorMsg.style.color = '#f43f5e';
-        pinErrorMsg.textContent = 'Incorrect PIN! Please try again.';
+        pinErrorMsg.textContent = 'Please enter your 10-digit mobile number first!';
       }
-
+      if (loginPhoneInput) {
+        loginPhoneInput.focus();
+        loginPhoneInput.select();
+      }
       setTimeout(() => {
         if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
         enteredPin = '';
         updateDots();
-      }, 700);
+      }, 900);
+      return;
     }
+
+    const registry = getUsersRegistry();
+    let user = registry.find(u => u.phone === phone);
+
+    if (user) {
+      // Existing User: Verify their personal 4-digit PIN
+      if (enteredPin === user.pin) {
+        unlockUserSession(phone, false);
+      } else {
+        pinDots.forEach(dot => dot.classList.add('error'));
+        if (pinDotsContainer) pinDotsContainer.classList.add('shake');
+        if (pinErrorMsg) {
+          pinErrorMsg.style.color = '#f43f5e';
+          pinErrorMsg.textContent = 'Incorrect PIN for this mobile number! Try again.';
+        }
+        setTimeout(() => {
+          if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
+          enteredPin = '';
+          updateDots();
+        }, 700);
+      }
+    } else {
+      // Brand New User: Register this phone with entered PIN
+      const newUser = {
+        phone: phone,
+        pin: enteredPin,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
+      };
+      registry.push(newUser);
+      saveUsersRegistry(registry);
+      unlockUserSession(phone, true);
+    }
+  }
+
+  function unlockUserSession(phone, isNew) {
+    pinDots.forEach(dot => dot.classList.add('success'));
+    sessionStorage.setItem(SESSION_LOCK_KEY, 'true');
+    currentActivePhone = phone;
+    localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+
+    if (pinErrorMsg) {
+      pinErrorMsg.style.color = '#10b981';
+      pinErrorMsg.textContent = isNew ? 'Account Created! Unlocking...' : 'PIN Verified! Unlocking...';
+    }
+
+    // Load separate data for this user
+    loadData();
+    renderDashboard();
+    updateActiveUserUI();
+
+    setTimeout(() => {
+      pinLockScreen.classList.add('unlocking');
+      setTimeout(() => {
+        pinLockScreen.classList.remove('active', 'unlocking');
+        enteredPin = '';
+        updateDots();
+        if (pinErrorMsg) {
+          pinErrorMsg.style.color = '';
+          pinErrorMsg.textContent = '';
+        }
+        showToast(isNew ? `Account created for +91 ${phone}!` : `Welcome back +91 ${phone}!`, 'success');
+      }, 350);
+    }, 250);
   }
 
   // Keypad clicks
@@ -1142,7 +1390,8 @@ function initPinLock() {
   // Physical keyboard support
   window.addEventListener('keydown', (e) => {
     if (!pinLockScreen.classList.contains('active')) return;
-    
+    if (document.activeElement === loginPhoneInput) return; // Don't intercept phone number typing!
+
     if (e.key >= '0' && e.key <= '9') {
       handleDigit(e.key);
     } else if (e.key === 'Backspace') {
@@ -1168,28 +1417,27 @@ function initPinLock() {
     });
   }
 
-  // Lock Application function
-  window.lockApp = function() {
+  // Switch User / Logout Handlers
+  window.logoutAndSwitchUser = function() {
     sessionStorage.removeItem(SESSION_LOCK_KEY);
+    pinLockScreen.classList.add('active');
+    pinLockScreen.classList.remove('unlocking');
     enteredPin = '';
     updateDots();
-    pinLockScreen.classList.remove('unlocking');
-    pinLockScreen.classList.add('active');
-    focusPinInput();
-    showToast('My Book is locked with PIN', 'neutral');
+    setupLoginScreen();
+    showToast('Session locked. Select or enter mobile number & PIN to switch account.', 'info');
   };
 
-  if (lockAppHeaderBtn) {
-    lockAppHeaderBtn.addEventListener('click', window.lockApp);
-  }
-
+  if (sidebarSwitchUserBtn) sidebarSwitchUserBtn.addEventListener('click', window.logoutAndSwitchUser);
+  if (headerSwitchUserBtn) headerSwitchUserBtn.addEventListener('click', window.logoutAndSwitchUser);
+  if (lockAppHeaderBtn) lockAppHeaderBtn.addEventListener('click', window.logoutAndSwitchUser);
   if (navLockBtn) {
     navLockBtn.addEventListener('click', (e) => {
       e.preventDefault();
       if (typeof window.closeMobileSidebar === 'function') {
         window.closeMobileSidebar();
       }
-      window.lockApp();
+      window.logoutAndSwitchUser();
     });
   }
 }
