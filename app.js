@@ -478,6 +478,32 @@ function setupEventListeners() {
     }
   }
 
+  // Handle Browser / Mobile Hardware Back Button (Swipe or Back Tap)
+  window.addEventListener('popstate', (e) => {
+    const detailModal = document.getElementById('customerDetailModal');
+    if (detailModal && detailModal.classList.contains('active')) {
+      detailModal.classList.remove('active');
+      const win = detailModal.querySelector('.mobile-window');
+      if (win) win.classList.remove('is-fullscreen');
+      return;
+    }
+
+    // Close any other open modals if back was pressed
+    const activeModals = document.querySelectorAll('.screen-overlay.active:not(#pinLockScreen)');
+    if (activeModals.length > 0) {
+      activeModals.forEach(m => m.classList.remove('active'));
+      return;
+    }
+
+    if (window.location.hash === '#customers') {
+      switchView('customers');
+    } else if (window.location.hash === '#analytics') {
+      switchView('analytics');
+    } else {
+      switchView('dashboard');
+    }
+  });
+
   // Handle URL hash if any
   window.addEventListener('hashchange', () => {
     if (window.location.hash === '#customers') {
@@ -724,7 +750,48 @@ function setupEventListeners() {
   // =========================================================================
   const detailModal = document.getElementById('customerDetailModal');
   const closeDetailBtn = document.getElementById('closeDetailModalBtn');
-  closeDetailBtn.addEventListener('click', () => detailModal.classList.remove('active'));
+  if (closeDetailBtn) {
+    closeDetailBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeCustomerDetailModal();
+    });
+  }
+
+  // Backdrop click to close customer detail modal
+  if (detailModal) {
+    detailModal.addEventListener('click', (e) => {
+      if (e.target === detailModal) {
+        closeCustomerDetailModal();
+      }
+    });
+  }
+
+  // Back to Dashboard buttons in full-page views
+  const btnBackCust = document.getElementById('btnBackToDashboardFromCust');
+  if (btnBackCust) {
+    btnBackCust.addEventListener('click', (e) => {
+      e.preventDefault();
+      goBackToDashboard();
+    });
+  }
+
+  const btnBackAnalytics = document.getElementById('btnBackToDashboardFromAnalytics');
+  if (btnBackAnalytics) {
+    btnBackAnalytics.addEventListener('click', (e) => {
+      e.preventDefault();
+      goBackToDashboard();
+    });
+  }
+
+  // Escape key to close customer detail modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (detailModal && detailModal.classList.contains('active')) {
+        closeCustomerDetailModal();
+      }
+    }
+  });
 
   // Delete Customer
   document.getElementById('deleteCustomerBtn').addEventListener('click', () => {
@@ -2215,6 +2282,27 @@ window.selectCustomerFromScreen = function(id) {
   openCustomerDetail(id);
 };
 
+// Global Close Customer Detail Modal
+window.closeCustomerDetailModal = function() {
+  const detailModal = document.getElementById('customerDetailModal');
+  if (detailModal) {
+    detailModal.classList.remove('active');
+    const win = detailModal.querySelector('.mobile-window');
+    if (win) win.classList.remove('is-fullscreen');
+  }
+  // If history state was pushed for modal, pop it cleanly
+  if (window.history.state && window.history.state.modal === 'customerDetail') {
+    window.history.back();
+  }
+};
+
+// Global Go Back to Dashboard
+window.goBackToDashboard = function() {
+  window.location.hash = 'dashboard';
+  switchView('dashboard');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 // Open Customer Detail Modal
 window.openCustomerDetail = function(customerId) {
   selectedCustomerId = customerId;
@@ -2222,7 +2310,17 @@ window.openCustomerDetail = function(customerId) {
   if (!cust) return;
 
   updateCustomerDetailView(cust);
-  document.getElementById('customerDetailModal').classList.add('active');
+  const detailModal = document.getElementById('customerDetailModal');
+  if (detailModal) {
+    detailModal.classList.add('active');
+  }
+
+  // Push history state so mobile swipe-back or back button closes the ledger
+  try {
+    if (!window.history.state || window.history.state.modal !== 'customerDetail') {
+      window.history.pushState({ modal: 'customerDetail', customerId }, '');
+    }
+  } catch (e) {}
 };
 
 // Update Customer Detail View
