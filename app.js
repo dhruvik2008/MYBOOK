@@ -254,7 +254,7 @@ function loadData() {
     }
   } else {
     customers = [];
-    saveData();
+    localStorage.setItem(currentKey, JSON.stringify(customers));
   }
 
   updateActiveBusinessUI();
@@ -1328,14 +1328,41 @@ function initPinLock() {
       return;
     }
 
+    isPinChecking = true;
+    if (pinErrorMsg) {
+      pinErrorMsg.style.color = '#38bdf8';
+      pinErrorMsg.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> લોગિન થઈ રહ્યું છે (+91 ${phone})...`;
+    }
+
     const registry = getUsersRegistry();
     let user = registry.find(u => u.phone === phone);
 
-    if (user) {
-      // Existing User on this device: Verify their personal 4-digit PIN locally
-      if (enteredPin === user.pin) {
-        unlockUserSession(phone, false, false);
-      } else {
+    // 1. Fetch from Google Firebase Realtime Database
+    let cloudSnapshot = null;
+    let cloudPin = null;
+    const fbUrl = getFirebaseUrl();
+
+    if (fbUrl) {
+      try {
+        const fbRes = await fetch(`${fbUrl}/vaults/${phone}.json`);
+        if (fbRes.ok) {
+          const fbJson = await fbRes.json();
+          if (fbJson) {
+            cloudPin = fbJson.pin;
+            cloudSnapshot = fbJson.snapshot;
+          }
+        }
+      } catch (e) {
+        console.warn('Firebase check:', e);
+      }
+    }
+
+    const expectedPin = cloudPin || (user && user.pin);
+
+    if (expectedPin) {
+      // Existing user (either in Firebase cloud or local device)
+      if (enteredPin !== expectedPin) {
+        isPinChecking = false;
         pinDots.forEach(dot => dot.classList.add('error'));
         if (pinDotsContainer) pinDotsContainer.classList.add('shake');
         if (pinErrorMsg) {
@@ -1347,136 +1374,46 @@ function initPinLock() {
           enteredPin = '';
           updateDots();
         }, 700);
-      }
-      return;
-    }
-
-    // =========================================================================
-    // User is NOT in local registry!
-    // (e.g. App uninstalled & re-installed, cache cleared, or new device)
-    // Automatically search the Cloud Vault for this phone number and PIN!
-    // =========================================================================
-    isPinChecking = true;
-    if (pinErrorMsg) {
-      pinErrorMsg.style.color = '#38bdf8';
-      pinErrorMsg.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> ક્લાઉડમાંથી ડેટા ચેક થઈ રહ્યો છે (+91 ${phone})...`;
-    }
-    if (pinInstructionLabel) {
-      pinInstructionLabel.textContent = 'ક્લાઉડ સર્વર સાથે કનેક્ટ થઈ રહ્યું છે...';
-    }
-
-    try {
-      let cloudVaultId = null;
-      let cloudSnapshot = null;
-      let cloudPin = null;
-
-      // 1. Check Google Firebase Realtime Database
-      const fbUrl = getFirebaseUrl();
-      if (fbUrl) {
-        try {
-          const fbRes = await fetch(`${fbUrl}/vaults/${phone}.json`);
-          if (fbRes.ok) {
-            const fbJson = await fbRes.json();
-            if (fbJson && fbJson.snapshot) {
-              cloudSnapshot = fbJson.snapshot;
-              cloudPin = fbJson.pin;
-            }
-          }
-        } catch (e) {
-          console.warn('Firebase check:', e);
-        }
+        return;
       }
 
-      // 2. Check Global KeyValue Registry for phone -> vaultId mapping
-      if (!cloudSnapshot) {
-        try {
-          const lookupRes = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${GLOBAL_REGISTRY_TOKEN}/phone_${phone}`);
-          if (lookupRes.ok) {
-            const rawId = await lookupRes.text();
-            const cleanId = rawId ? rawId.trim().replace(/^"|"$/g, '') : '';
-            if (cleanId && cleanId !== 'null' && cleanId.length > 5) {
-              cloudVaultId = cleanId;
-            }
-          }
-        } catch (lookupErr) {
-          console.warn('KeyValue lookup error:', lookupErr);
-        }
+      // PIN is correct!
+      currentActivePhone = phone;
+      localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+      localStorage.setItem(CLOUD_PHONE_KEY, phone);
+      localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
 
-        if (cloudVaultId) {
-          const vaultRes = await fetch(`https://api.restful-api.dev/objects/${cloudVaultId}`);
-          if (vaultRes.ok) {
-            const vaultObj = await vaultRes.json();
-            if (vaultObj && vaultObj.data) {
-              cloudPin = vaultObj.data.pin;
-              if (vaultObj.data.payload) {
-                try {
-                  cloudSnapshot = JSON.parse(vaultObj.data.payload);
-                } catch (parseErr) {
-                  console.error('Snapshot JSON parse error:', parseErr);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // If a cloud ledger was found for this phone number:
-      if (cloudSnapshot) {
-        // Verify PIN against cloud record
-        if (cloudPin && enteredPin !== cloudPin) {
-          isPinChecking = false;
-          pinDots.forEach(dot => dot.classList.add('error'));
-          if (pinDotsContainer) pinDotsContainer.classList.add('shake');
-          if (pinErrorMsg) {
-            pinErrorMsg.style.color = '#f43f5e';
-            pinErrorMsg.textContent = 'આ નંબરનું ક્લાઉડ એકાઉન્ટ મળ્યું છે, પરંતુ PIN ખોટો છે!';
-          }
-          if (pinInstructionLabel) {
-            pinInstructionLabel.textContent = 'સાચો 4-અંકનો PIN નાખો';
-          }
-          setTimeout(() => {
-            if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
-            enteredPin = '';
-            updateDots();
-          }, 900);
-          return;
-        }
-
-        // PIN MATCHED! Restore all user ledger data from the cloud!
-        currentActivePhone = phone;
-        localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
-        localStorage.setItem(CLOUD_PHONE_KEY, phone);
-        localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
-        if (cloudVaultId) {
-          localStorage.setItem(CLOUD_VAULT_ID_KEY, cloudVaultId);
-          if (typeof getUserCloudVaultIdKey === 'function') {
-            localStorage.setItem(getUserCloudVaultIdKey(), cloudVaultId);
-          }
-        }
-
-        // Register user locally so subsequent logins are instant
-        const restoredUser = {
+      if (!user) {
+        user = {
           phone: phone,
           pin: enteredPin,
           createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-          cloudVaultId: cloudVaultId || ''
+          lastLogin: new Date().toISOString()
         };
-        registry.push(restoredUser);
-        saveUsersRegistry(registry);
-
-        // Apply snapshot to restore all customers, transactions & business partitions
-        applyFullLedgerSnapshot(cloudSnapshot);
-
-        isPinChecking = false;
-        unlockUserSession(phone, false, true);
-        return;
+        registry.push(user);
+      } else {
+        user.pin = enteredPin;
+        user.lastLogin = new Date().toISOString();
       }
-    } catch (netErr) {
-      console.warn('Cloud auto-lookup encountered an error:', netErr);
+      saveUsersRegistry(registry);
+
+      if (cloudSnapshot) {
+        applyFullLedgerSnapshot(cloudSnapshot, phone);
+      } else {
+        loadData();
+      }
+
+      isPinChecking = false;
+      unlockUserSession(phone, false, !!cloudSnapshot);
+      return;
     }
 
-    // No cloud account found (or device offline) - Register as a brand new account
+    // Brand new user (neither in Firebase nor on local device)
+    currentActivePhone = phone;
+    localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+    localStorage.setItem(CLOUD_PHONE_KEY, phone);
+    localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
+
     const newUser = {
       phone: phone,
       pin: enteredPin,
@@ -1485,6 +1422,8 @@ function initPinLock() {
     };
     registry.push(newUser);
     saveUsersRegistry(registry);
+
+    loadData();
     isPinChecking = false;
     unlockUserSession(phone, true, false);
   }
@@ -1505,7 +1444,7 @@ function initPinLock() {
     if (pinErrorMsg) {
       pinErrorMsg.style.color = '#10b981';
       if (isRestored) {
-        pinErrorMsg.textContent = '🎉 ક્લાઉડમાંથી ડેટા આવી ગયો છે! ખુલી રહ્યું છે...';
+        pinErrorMsg.textContent = '🎉 restore a data from clau...';
       } else if (isNew) {
         pinErrorMsg.textContent = 'નવું એકાઉન્ટ બની ગયું! ખુલી રહ્યું છે...';
       } else {
@@ -1533,7 +1472,7 @@ function initPinLock() {
         } else {
           showToast(isNew ? `+91 ${phone} માટે નવું એકાઉન્ટ શરૂ થયું!` : `સ્વાગત છે +91 ${phone}!`, 'success');
         }
-        if (typeof triggerAutoCloudSync === 'function') {
+        if (isNew && typeof triggerAutoCloudSync === 'function') {
           triggerAutoCloudSync();
         }
       }, 350);
@@ -1799,9 +1738,12 @@ function getFullLedgerSnapshot() {
   };
 }
 
-function applyFullLedgerSnapshot(data) {
-  if (!data || (!data.customers && !data.allBizData)) {
-    throw new Error('Invalid backup data format');
+function applyFullLedgerSnapshot(data, phone = '') {
+  if (!data) return;
+
+  if (phone) {
+    currentActivePhone = phone;
+    localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
   }
 
   if (Array.isArray(data.businessAccounts) && data.businessAccounts.length > 0) {
@@ -1827,13 +1769,18 @@ function applyFullLedgerSnapshot(data) {
     });
   }
 
+  const currentKey = getStorageKeyForBusiness(activeBusinessId);
   if (Array.isArray(data.customers)) {
     customers = data.customers;
-    const currentKey = getStorageKeyForBusiness(activeBusinessId);
+    localStorage.setItem(currentKey, JSON.stringify(customers));
+  } else if (data.allBizData && Array.isArray(data.allBizData[activeBusinessId])) {
+    customers = data.allBizData[activeBusinessId];
     localStorage.setItem(currentKey, JSON.stringify(customers));
   }
 
   if (data.businessName) {
+    const prefix = getUserPrefix();
+    if (prefix) localStorage.setItem(`khatabook_${prefix}biz_name`, data.businessName);
     localStorage.setItem(BUSINESS_NAME_KEY, data.businessName);
     const activeBiz = getActiveBusiness();
     if (activeBiz) activeBiz.name = data.businessName;
