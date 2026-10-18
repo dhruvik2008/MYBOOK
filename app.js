@@ -13,6 +13,27 @@ const BIZ_ADDR_KEY = 'khatabook_biz_addr_v2';
 const BUSINESSES_LIST_KEY = 'khatabook_businesses_list_v2';
 const ACTIVE_BIZ_ID_KEY = 'khatabook_active_biz_id_v2';
 
+// ==========================================================================
+// GOOGLE FIREBASE REALTIME DATABASE CONFIGURATION
+// ==========================================================================
+const DEFAULT_FIREBASE_URL = 'https://mybook-3bff2-default-rtdb.firebaseio.com';
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCCxh01OP9U8gnzGGGNmY-H4RkqtxCGuOs",
+  authDomain: "mybook-3bff2.firebaseapp.com",
+  databaseURL: "https://mybook-3bff2-default-rtdb.firebaseio.com",
+  projectId: "mybook-3bff2",
+  storageBucket: "mybook-3bff2.firebasestorage.app",
+  messagingSenderId: "179076979575",
+  appId: "1:179076979575:web:8df42023e9e5ba6b341f72",
+  measurementId: "G-GQLCM2E907"
+};
+const FIREBASE_CUSTOM_URL_KEY = 'khatabook_firebase_custom_url_v2';
+
+function getFirebaseUrl() {
+  const custom = (localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '').trim().replace(/\/$/, '');
+  return custom || DEFAULT_FIREBASE_URL;
+}
+
 // Application State (Completely empty initially - NO DUMMY DATA)
 let businessAccounts = [];
 let activeBusinessId = 'biz_default';
@@ -1349,11 +1370,11 @@ function initPinLock() {
       let cloudSnapshot = null;
       let cloudPin = null;
 
-      // 1. Check custom Firebase if configured
-      const customFirebase = (localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '').trim().replace(/\/$/, '');
-      if (customFirebase) {
+      // 1. Check Google Firebase Realtime Database
+      const fbUrl = getFirebaseUrl();
+      if (fbUrl) {
         try {
-          const fbRes = await fetch(`${customFirebase}/vaults/${phone}.json`);
+          const fbRes = await fetch(`${fbUrl}/vaults/${phone}.json`);
           if (fbRes.ok) {
             const fbJson = await fbRes.json();
             if (fbJson && fbJson.snapshot) {
@@ -1740,7 +1761,6 @@ const CLOUD_PIN_KEY = 'khatabook_cloud_pin_v2';
 const CLOUD_VAULT_ID_KEY = 'khatabook_cloud_vault_id_v2';
 const CLOUD_AUTOSYNC_KEY = 'khatabook_cloud_autosync_v2';
 const CLOUD_LAST_SYNC_KEY = 'khatabook_cloud_last_sync_v2';
-const FIREBASE_CUSTOM_URL_KEY = 'khatabook_firebase_custom_url_v2';
 
 function getUserCloudVaultIdKey() {
   const prefix = getUserPrefix();
@@ -1860,13 +1880,13 @@ async function performCloudBackup(isAuto = false) {
   if (statusText) statusText.textContent = 'Syncing to Cloud...';
 
   const snapshot = getFullLedgerSnapshot();
-  const customFirebase = (localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '').trim().replace(/\/$/, '');
+  const fbBase = getFirebaseUrl();
 
   try {
     let cloudVaultId = localStorage.getItem(getUserCloudVaultIdKey()) || localStorage.getItem(CLOUD_VAULT_ID_KEY);
 
-    if (customFirebase) {
-      const fbUrl = `${customFirebase}/vaults/${phone}.json`;
+    if (fbBase) {
+      const fbUrl = `${fbBase}/vaults/${phone}.json`;
       const res = await fetch(fbUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1983,16 +2003,16 @@ async function performCloudRestore(closeModalCallback) {
 
   try {
     let cloudVaultId = localStorage.getItem(getUserCloudVaultIdKey()) || localStorage.getItem(CLOUD_VAULT_ID_KEY);
-    const customFirebase = (localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '').trim().replace(/\/$/, '');
+    const fbBase = getFirebaseUrl();
 
     let retrievedData = null;
 
-    if (customFirebase) {
-      const fbUrl = `${customFirebase}/vaults/${phone}.json`;
+    if (fbBase) {
+      const fbUrl = `${fbBase}/vaults/${phone}.json`;
       const res = await fetch(fbUrl);
-      if (!res.ok) throw new Error('Data not found on Firebase');
+      if (!res.ok) throw new Error('Firebase connection error: ' + res.statusText);
       const json = await res.json();
-      if (!json || !json.snapshot) throw new Error('No ledger found for this mobile number on Firebase');
+      if (!json || !json.snapshot) throw new Error('આ મોબાઈલ નંબર (+91 ' + phone + ') નો કોઈ ડેટા Firebase ક્લાઉડ પર મળ્યો નથી.');
       retrievedData = json.snapshot;
     } else {
       // If we don't have a local vault ID, automatically lookup from KeyValue registry
@@ -2086,12 +2106,12 @@ function initCloudVaultSync(openBackupModal, closeBackupModal) {
   const savedVaultId = localStorage.getItem(CLOUD_VAULT_ID_KEY);
   const savedLastSync = localStorage.getItem(CLOUD_LAST_SYNC_KEY);
   const isAutoEnabled = localStorage.getItem(CLOUD_AUTOSYNC_KEY) !== 'false';
-  const savedFbUrl = localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || '';
+  const savedFbUrl = localStorage.getItem(FIREBASE_CUSTOM_URL_KEY) || DEFAULT_FIREBASE_URL;
 
   if (phoneInput && savedPhone) phoneInput.value = savedPhone;
   if (pinInput && savedPin) pinInput.value = savedPin;
   if (autoSyncToggle) autoSyncToggle.checked = isAutoEnabled;
-  if (customFirebaseInput && savedFbUrl) customFirebaseInput.value = savedFbUrl;
+  if (customFirebaseInput) customFirebaseInput.value = savedFbUrl;
 
   if (savedLastSync && lastSyncDisplay) {
     lastSyncDisplay.textContent = `Last synced: ${savedLastSync}`;
