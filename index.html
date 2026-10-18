@@ -101,14 +101,6 @@
 
         <div class="pin-footer-hint" style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
           <span><i class="ri-shield-check-line"></i> Protected &bull; Enter Security PIN to Unlock</span>
-          <span style="font-size: 11px; color: #38bdf8; opacity: 0.95;"><i class="ri-cloud-line"></i> If App is Delete
-            Try This To Recover Data</span>
-        </div>
-        <div style="margin-top: 10px;">
-          <button type="button" class="pin-restore-link" id="pinScreenRestoreBtn"
-            style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #c7d2fe; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 10px; transition: all 0.2s ease;">
-            <i class="ri-refresh-line"></i> Manual Restore / Cloud Settings
-          </button>
         </div>
       </div>
     </div>
@@ -162,10 +154,6 @@
           <i class="ri-file-chart-line"></i>
           <span>Ledger Report</span>
         </a>
-        <a href="#" class="nav-item" id="navBackupBtn">
-          <i class="ri-refresh-line"></i>
-          <span>Sync &amp; Backup</span>
-        </a>
         <a href="#" class="nav-item" id="navLockBtn">
           <i class="ri-lock-2-line"></i>
           <span>Lock App</span>
@@ -189,10 +177,6 @@
       </div>
 
       <div class="sidebar-footer">
-        <div class="sync-status">
-          <span class="status-dot"></span>
-          <span>100% Offline & Auto-Saved</span>
-        </div>
         <div class="security-badge">
           <i class="ri-shield-check-fill"></i> Secure Data Storage
         </div>
@@ -247,11 +231,6 @@
           <button class="btn btn-outline" id="lockAppHeaderBtn" title="Lock App with PIN">
             <i class="ri-lock-2-line"></i>
             <span>Lock</span>
-          </button>
-          <button class="btn btn-outline" id="headerCloudSyncBtn"
-            title="Sync with Cloud (Pull updates from User 2 / Partner)">
-            <i class="ri-refresh-line" id="headerCloudSyncIcon"></i>
-            <span>Sync Cloud</span>
           </button>
           <button class="btn btn-outline" id="downloadReportBtn" title="View & Print Ledger Report">
             <i class="ri-file-download-line"></i>
@@ -341,10 +320,6 @@
               style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
               <button class="btn btn-primary" id="emptyStateAddBtn">
                 <i class="ri-add-line"></i> Add Customer
-              </button>
-              <button class="btn btn-secondary" id="emptyStateRestoreCloudBtn"
-                style="background: rgba(99, 102, 241, 0.12); color: #4f46e5; border: 1.5px solid rgba(99, 102, 241, 0.3);">
-                <i class="ri-cloud-download-line"></i> Restore from Cloud
               </button>
             </div>
           </div>
@@ -1073,187 +1048,7 @@
     </div>
   </div>
 
-  <!-- =========================================================================
-       MODAL 6: DATA SYNC & MULTI-DEVICE BACKUP
-       ========================================================================= -->
-  <div class="screen-overlay" id="backupModal">
-    <div class="mobile-window modal-wide">
-      <div class="screen-header-blue">
-        <button class="btn-icon-white" id="closeBackupBtn" title="Back">
-          <i class="ri-arrow-left-line"></i>
-        </button>
-        <span class="screen-header-title">Multi-Device Data Sync &amp; Backup</span>
-      </div>
 
-      <div class="backup-modal-content">
-        <!-- Banner explanation -->
-        <div class="sync-info-banner">
-          <div class="sync-banner-icon">
-            <i class="ri-smartphone-line"></i>
-            <i class="ri-arrow-left-right-line"></i>
-            <i class="ri-computer-line"></i>
-          </div>
-          <div>
-            <h3>Same Data on Different Devices</h3>
-            <p>Because My Book runs fast and private in your browser, data is stored locally. Use the options below to
-              sync your ledger across multiple phones, laptops, and PCs:</p>
-          </div>
-        </div>
-
-        <!-- 2 Clear Options -->
-        <div class="sync-options-grid">
-          <!-- Option 1: Instant File Export / Import -->
-          <div class="sync-option-card highlighted">
-            <div class="sync-card-badge">Instant &amp; 100% Free</div>
-            <div class="sync-card-header">
-              <div class="sync-card-icon"><i class="ri-download-cloud-2-line"></i></div>
-              <div>
-                <h4>1-Click Backup File (Export / Import)</h4>
-                <p>Transfer data to any phone, laptop, or tablet in 5 seconds without internet.</p>
-              </div>
-            </div>
-
-            <div class="sync-actions-row">
-              <button type="button" class="btn-sync-action btn-export" id="exportDataBtn">
-                <i class="ri-download-2-line"></i>
-                <div class="btn-sync-text">
-                  <strong>Export / Download Backup</strong>
-                  <span>Save .json file to send via WhatsApp, Drive, or Email</span>
-                </div>
-              </button>
-
-              <button type="button" class="btn-sync-action btn-import" id="importDataTriggerBtn">
-                <i class="ri-upload-2-line"></i>
-                <div class="btn-sync-text">
-                  <strong>Import / Restore on This Device</strong>
-                  <span>Select backup file from your other device to load all data</span>
-                </div>
-              </button>
-              <input type="file" id="importFileInput" accept=".json" style="display: none;">
-            </div>
-          </div>
-
-          <!-- Option 2: Automatic Live Cloud Sync (Firebase & Cloud Vault) -->
-          <div class="sync-option-card cloud-vault-card highlighted-cloud">
-            <div class="sync-card-badge cloud">Automatic Live Sync ☁️</div>
-            <div class="sync-card-header">
-              <div class="sync-card-icon cloud"><i class="ri-cloud-fill"></i></div>
-              <div>
-                <h4>Automatic Cloud Vault</h4>
-                <p>Syncs your ledger online securely. If app or phone is deleted, restore in 2 seconds.</p>
-              </div>
-            </div>
-
-            <!-- Cloud Vault Status Banner -->
-            <div class="cloud-status-indicator" id="cloudStatusIndicator">
-              <div class="cloud-status-left">
-                <span class="status-pulse-dot" id="cloudStatusDot"></span>
-                <strong id="cloudStatusText">Cloud Vault Ready</strong>
-              </div>
-              <span class="cloud-last-sync" id="cloudLastSyncTime">Not synced yet</span>
-            </div>
-
-            <!-- Cloud Account Credentials -->
-            <div class="cloud-form-fields">
-              <div class="cloud-field-row">
-                <div class="cloud-input-group">
-                  <label for="cloudPhoneInput"><i class="ri-phone-line"></i> Registered Mobile Number</label>
-                  <div class="input-with-action">
-                    <input type="tel" id="cloudPhoneInput" placeholder="Enter 10-digit mobile number" maxlength="15">
-                    <button type="button" class="btn-use-biz-phone" id="btnUseBizPhoneForCloud" title="Auto-fill Phone">
-                      <i class="ri-magic-line"></i> Fill
-                    </button>
-                  </div>
-                </div>
-
-                <div class="cloud-input-group">
-                  <label for="cloudPinInput"><i class="ri-lock-password-line"></i> Cloud Security PIN</label>
-                  <input type="password" id="cloudPinInput" placeholder="4-digit PIN (e.g. 1234)" maxlength="8">
-                </div>
-              </div>
-
-              <!-- Auto-sync Toggle Switch -->
-              <div class="cloud-toggle-row">
-                <label class="switch-container">
-                  <input type="checkbox" id="autoCloudSyncToggle" checked>
-                  <span class="switch-slider"></span>
-                </label>
-                <div class="switch-label-box">
-                  <strong>Auto-Sync Every Change</strong>
-                  <p>Whenever you add/edit any transaction, it automatically updates in the cloud.</p>
-                </div>
-              </div>
-
-              <!-- Primary Cloud Action Buttons -->
-              <div class="cloud-actions-row">
-                <button type="button" class="btn-cloud-action btn-cloud-backup" id="btnCloudBackupNow">
-                  <i class="ri-cloud-upload-fill"></i>
-                  <div class="btn-cloud-text">
-                    <strong>Backup to Cloud Now</strong>
-                    <span>Save latest ledger snapshot online</span>
-                  </div>
-                </button>
-
-                <button type="button" class="btn-cloud-action btn-cloud-restore" id="btnCloudRestoreNow">
-                  <i class="ri-cloud-download-fill"></i>
-                  <div class="btn-cloud-text">
-                    <strong>Restore from Cloud</strong>
-                    <span>Download &amp; restore ledger data</span>
-                  </div>
-                </button>
-              </div>
-
-              <!-- Vault ID Display and Copy -->
-              <div class="cloud-sync-key-row" id="cloudSyncKeyBox" style="display: none;">
-                <div class="vault-id-label">
-                  <i class="ri-key-2-line"></i>
-                  <span>Cloud Vault Key:</span>
-                </div>
-                <code id="cloudVaultIdDisplay">---</code>
-                <button type="button" class="btn-copy-vault-id" id="btnCopyVaultId" title="Copy Vault Key">
-                  <i class="ri-file-copy-line"></i> Copy
-                </button>
-              </div>
-
-              <!-- 2 Users / 2 Phones Sharing Box -->
-              <div class="cloud-partner-share-box"
-                style="background: #f8fafc; border: 1.5px dashed #c7d2fe; border-radius: 12px; padding: 12px 14px; margin-top: 6px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                  <i class="ri-user-shared-line" style="color: #4f46e5; font-size: 18px;"></i>
-                  <strong style="font-size: 13px; color: #1e1b4b;">2 Users / 2 Phones Live Sync</strong>
-                </div>
-                <p style="font-size: 11.5px; color: #475569; line-height: 1.45; margin-bottom: 10px;">
-                  To use this ledger on a second phone (User 2), send your partner the connect link via WhatsApp:
-                </p>
-                <button type="button" class="btn-safety-wa" id="btnShareWithPartner"
-                  style="background: #4f46e5; color: #ffffff; border: none; font-size: 12px; height: 38px;">
-                  <i class="ri-whatsapp-line"></i> Send Connect Link to User 2 via WhatsApp
-                </button>
-              </div>
-
-              <!-- Extra Redundant Cloud Safety: Send to WhatsApp / Google Drive -->
-              <div class="cloud-safety-strip">
-                <button type="button" class="btn-safety-wa" id="btnSendBackupWhatsApp">
-                  <i class="ri-whatsapp-line"></i> Send Backup File to WhatsApp / Self
-                </button>
-              </div>
-
-              <!-- Advanced Firebase Custom Database (Collapsible) -->
-              <details class="firebase-custom-details">
-                <summary><i class="ri-settings-4-line"></i> Advanced: Custom Firebase Realtime Database URL</summary>
-                <div class="firebase-config-inner">
-                  <p>Optional: Connect your own private Google Firebase project database:</p>
-                  <input type="url" id="customFirebaseUrlInput"
-                    placeholder="https://your-project-default-rtdb.firebaseio.com">
-                  <button type="button" class="btn-save-firebase" id="btnSaveFirebaseUrl">Save Firebase</button>
-                </div>
-              </details>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- =========================================================================
        MODAL 7: UPI QR CODE GENERATOR (GPay, PhonePe, Paytm, BHIM)
