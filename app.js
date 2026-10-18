@@ -2400,22 +2400,26 @@ function renderDashboard() {
 
   const netDisplay = document.getElementById('netBalanceDisplay');
   const netSub = document.getElementById('netBalanceSub');
-  netDisplay.textContent = formatCurrency(Math.abs(netBalance));
+  if (netDisplay) {
+    netDisplay.textContent = formatCurrency(Math.abs(netBalance));
 
-  if (netBalance > 0) {
-    netDisplay.style.color = 'var(--receive-green)';
-    netSub.innerHTML = '<span style="color:var(--receive-green); font-weight:600;"><i class="ri-arrow-down-line"></i> Net You will receive</span>';
-  } else if (netBalance < 0) {
-    netDisplay.style.color = 'var(--pay-red)';
-    netSub.innerHTML = '<span style="color:var(--pay-red); font-weight:600;"><i class="ri-arrow-up-line"></i> Net You will give</span>';
-  } else {
-    netDisplay.style.color = 'var(--brand-blue)';
-    netSub.textContent = 'All accounts settled (₹0)';
+    if (netBalance > 0) {
+      netDisplay.style.color = 'var(--receive-green)';
+      if (netSub) netSub.innerHTML = '<span style="color:var(--receive-green); font-weight:600;"><i class="ri-arrow-down-line"></i> Net You will receive</span>';
+    } else if (netBalance < 0) {
+      netDisplay.style.color = 'var(--pay-red)';
+      if (netSub) netSub.innerHTML = '<span style="color:var(--pay-red); font-weight:600;"><i class="ri-arrow-up-line"></i> Net You will give</span>';
+    } else {
+      netDisplay.style.color = 'var(--brand-blue)';
+      if (netSub) netSub.textContent = 'All accounts settled (₹0)';
+    }
   }
 
   const custCount = customers.length;
-  document.getElementById('totalCustomerCountDisplay').textContent = custCount;
-  document.getElementById('navCustomerCount').textContent = custCount;
+  const custCountDisplay = document.getElementById('totalCustomerCountDisplay');
+  if (custCountDisplay) custCountDisplay.textContent = custCount;
+  const navCustomerCount = document.getElementById('navCustomerCount');
+  if (navCustomerCount) navCustomerCount.textContent = custCount;
 
   // Filter Counters
   document.getElementById('countAll').textContent = custCount;
