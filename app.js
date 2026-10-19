@@ -257,6 +257,14 @@ function loadData() {
     localStorage.setItem(currentKey, JSON.stringify(customers));
   }
 
+  customers = customers.map(c => {
+    if (!c) return { id: 'cust_' + Date.now(), name: 'Customer', phone: '', transactions: [] };
+    return {
+      ...c,
+      transactions: Array.isArray(c.transactions) ? c.transactions : []
+    };
+  });
+
   updateActiveBusinessUI();
   updateActiveUserUI();
 }
@@ -321,7 +329,7 @@ function getInitials(name) {
 // You gave = You'll get (debit / + balance)
 // You got = You'll give (credit / - balance)
 function calculateCustomerBalance(customer) {
-  if (!customer.transactions || customer.transactions.length === 0) {
+  if (!customer || !Array.isArray(customer.transactions) || customer.transactions.length === 0) {
     return { balance: 0, status: 'settled', amount: 0 };
   }
 
@@ -329,6 +337,7 @@ function calculateCustomerBalance(customer) {
   let totalGot = 0;
 
   customer.transactions.forEach(t => {
+    if (!t) return;
     const val = Number(t.amount) || 0;
     if (t.type === 'give') {
       totalGave += val;
@@ -954,6 +963,8 @@ function setupEventListeners() {
     const cust = customers.find(c => c.id === selectedCustomerId);
     if (!cust) return;
 
+    if (!Array.isArray(cust.transactions)) cust.transactions = [];
+
     if (dueDate) {
       cust.dueDate = dueDate;
     }
@@ -1292,7 +1303,7 @@ function initPinLock() {
   }
 
   function handleBackspace() {
-    if (isPinChecking) return;
+    isPinChecking = false;
     if (enteredPin.length > 0) {
       enteredPin = enteredPin.slice(0, -1);
       updateDots();
@@ -1300,9 +1311,12 @@ function initPinLock() {
   }
 
   function handleClear() {
-    if (isPinChecking) return;
+    isPinChecking = false;
     enteredPin = '';
     updateDots();
+    if (pinErrorMsg) {
+      pinErrorMsg.textContent = '';
+    }
   }
 
   async function validatePin() {
@@ -1334,133 +1348,191 @@ function initPinLock() {
       pinErrorMsg.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> લોગિન થઈ રહ્યું છે (+91 ${phone})...`;
     }
 
-    const registry = getUsersRegistry();
-    let user = registry.find(u => u.phone === phone);
+    try {
+      const registry = getUsersRegistry();
+      let user = registry.find(u => u.phone === phone);
 
-    // 1. Fetch from Google Firebase Realtime Database
-    let cloudSnapshot = null;
-    let cloudPin = null;
-    const fbUrl = getFirebaseUrl();
+      // Fast Path: If user already exists on this device and entered PIN matches local PIN
+      if (user && user.pin && enteredPin === user.pin) {
+        currentActivePhone = phone;
+        localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+        localStorage.setItem(CLOUD_PHONE_KEY, phone);
+        localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
 
-    if (fbUrl) {
-      try {
-        const fbRes = await fetch(`${fbUrl}/vaults/${phone}.json`);
-        if (fbRes.ok) {
-          const fbJson = await fbRes.json();
-          if (fbJson) {
-            cloudPin = fbJson.pin;
-            cloudSnapshot = fbJson.snapshot;
-          }
+        user.lastLogin = new Date().toISOString();
+        saveUsersRegistry(registry);
+
+        unlockUserSession(phone, false, false);
+
+        // Background check for cloud updates (non-blocking)
+        const fbUrl = getFirebaseUrl();
+        if (fbUrl) {
+          try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3500);
+            fetch(`${fbUrl}/vaults/${phone}.json`, { signal: controller.signal })
+              .then(res => res.ok ? res.json() : null)
+              .then(fbJson => {
+                clearTimeout(timer);
+                if (fbJson && fbJson.snapshot) {
+                  applyFullLedgerSnapshot(fbJson.snapshot, phone);
+                }
+              })
+              .catch(() => {
+                clearTimeout(timer);
+              });
+          } catch (e) { }
         }
-      } catch (e) {
-        console.warn('Firebase check:', e);
-      }
-    }
-
-    const expectedPin = cloudPin || (user && user.pin);
-
-    if (expectedPin) {
-      // Existing user (either in Firebase cloud or local device)
-      if (enteredPin !== expectedPin) {
-        isPinChecking = false;
-        pinDots.forEach(dot => dot.classList.add('error'));
-        if (pinDotsContainer) pinDotsContainer.classList.add('shake');
-        if (pinErrorMsg) {
-          pinErrorMsg.style.color = '#f43f5e';
-          pinErrorMsg.textContent = 'ખોટો PIN છે! કૃપા કરીને સાચો PIN નાખો.';
-        }
-        setTimeout(() => {
-          if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
-          enteredPin = '';
-          updateDots();
-        }, 700);
         return;
       }
 
-      // PIN is correct!
+      // If local PIN did not match OR user is logging in on this device for the first time:
+      // Fetch from Google Firebase Realtime Database with a strict 3.5s timeout
+      let cloudSnapshot = null;
+      let cloudPin = null;
+      const fbUrl = getFirebaseUrl();
+
+      if (fbUrl) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 3500);
+          const fbRes = await fetch(`${fbUrl}/vaults/${phone}.json`, { signal: controller.signal });
+          clearTimeout(timer);
+          if (fbRes.ok) {
+            const fbJson = await fbRes.json();
+            if (fbJson) {
+              cloudPin = fbJson.pin;
+              cloudSnapshot = fbJson.snapshot;
+            }
+          }
+        } catch (e) {
+          console.warn('Firebase check timed out or failed:', e);
+        }
+      }
+
+      const expectedPin = cloudPin || (user && user.pin);
+
+      if (expectedPin) {
+        // Existing user (either in Firebase cloud or local device)
+        if (enteredPin !== expectedPin) {
+          isPinChecking = false;
+          pinDots.forEach(dot => dot.classList.add('error'));
+          if (pinDotsContainer) pinDotsContainer.classList.add('shake');
+          if (pinErrorMsg) {
+            pinErrorMsg.style.color = '#f43f5e';
+            pinErrorMsg.textContent = 'ખોટો PIN છે! કૃપા કરીને સાચો PIN નાખો.';
+          }
+          setTimeout(() => {
+            if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
+            enteredPin = '';
+            updateDots();
+          }, 700);
+          return;
+        }
+
+        // PIN is correct!
+        currentActivePhone = phone;
+        localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+        localStorage.setItem(CLOUD_PHONE_KEY, phone);
+        localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
+
+        if (!user) {
+          user = {
+            phone: phone,
+            pin: enteredPin,
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString()
+          };
+          registry.push(user);
+        } else {
+          user.pin = enteredPin;
+          user.lastLogin = new Date().toISOString();
+        }
+        saveUsersRegistry(registry);
+
+        if (cloudSnapshot) {
+          applyFullLedgerSnapshot(cloudSnapshot, phone);
+        } else {
+          loadData();
+        }
+
+        unlockUserSession(phone, false, !!cloudSnapshot);
+        return;
+      }
+
+      // Brand new user (neither in Firebase nor on local device)
       currentActivePhone = phone;
       localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
       localStorage.setItem(CLOUD_PHONE_KEY, phone);
       localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
 
-      if (!user) {
-        user = {
-          phone: phone,
-          pin: enteredPin,
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString()
-        };
-        registry.push(user);
-      } else {
-        user.pin = enteredPin;
-        user.lastLogin = new Date().toISOString();
-      }
+      const newUser = {
+        phone: phone,
+        pin: enteredPin,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
+      };
+      registry.push(newUser);
       saveUsersRegistry(registry);
 
-      if (cloudSnapshot) {
-        applyFullLedgerSnapshot(cloudSnapshot, phone);
-      } else {
-        loadData();
-      }
-
+      loadData();
+      unlockUserSession(phone, true, false);
+    } catch (err) {
+      console.error('Critical login error in validatePin:', err);
       isPinChecking = false;
-      unlockUserSession(phone, false, !!cloudSnapshot);
-      return;
+      pinDots.forEach(dot => dot.classList.add('error'));
+      if (pinDotsContainer) pinDotsContainer.classList.add('shake');
+      if (pinErrorMsg) {
+        pinErrorMsg.style.color = '#f43f5e';
+        pinErrorMsg.textContent = 'લોગિનમાં સમસ્યા આવી! કૃપા કરીને ફરી PIN નાખો.';
+      }
+      setTimeout(() => {
+        if (pinDotsContainer) pinDotsContainer.classList.remove('shake');
+        enteredPin = '';
+        updateDots();
+        isPinChecking = false;
+      }, 800);
     }
-
-    // Brand new user (neither in Firebase nor on local device)
-    currentActivePhone = phone;
-    localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
-    localStorage.setItem(CLOUD_PHONE_KEY, phone);
-    localStorage.setItem(CLOUD_PIN_KEY, enteredPin);
-
-    const newUser = {
-      phone: phone,
-      pin: enteredPin,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString()
-    };
-    registry.push(newUser);
-    saveUsersRegistry(registry);
-
-    loadData();
-    isPinChecking = false;
-    unlockUserSession(phone, true, false);
   }
 
   function unlockUserSession(phone, isNew, isRestored = false) {
-    pinDots.forEach(dot => dot.classList.add('success'));
-    sessionStorage.setItem(SESSION_LOCK_KEY, 'true');
-    currentActivePhone = phone;
-    localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
-    localStorage.setItem(CLOUD_PHONE_KEY, phone);
+    try {
+      pinDots.forEach(dot => dot.classList.add('success'));
+      sessionStorage.setItem(SESSION_LOCK_KEY, 'true');
+      currentActivePhone = phone;
+      localStorage.setItem(ACTIVE_USER_PHONE_KEY, phone);
+      localStorage.setItem(CLOUD_PHONE_KEY, phone);
 
-    const registry = getUsersRegistry();
-    const currUser = registry.find(u => u.phone === phone);
-    if (currUser && currUser.pin) {
-      localStorage.setItem(CLOUD_PIN_KEY, currUser.pin);
-    }
-
-    if (pinErrorMsg) {
-      pinErrorMsg.style.color = '#10b981';
-      if (isRestored) {
-        pinErrorMsg.textContent = '🎉 restore a data from clau...';
-      } else if (isNew) {
-        pinErrorMsg.textContent = 'નવું એકાઉન્ટ બની ગયું! ખુલી રહ્યું છે...';
-      } else {
-        pinErrorMsg.textContent = 'PIN સાચો છે! ખુલી રહ્યું છે...';
+      const registry = getUsersRegistry();
+      const currUser = registry.find(u => u.phone === phone);
+      if (currUser && currUser.pin) {
+        localStorage.setItem(CLOUD_PIN_KEY, currUser.pin);
       }
-    }
 
-    // Load separate data for this user
-    loadData();
-    renderDashboard();
-    updateActiveUserUI();
+      if (pinErrorMsg) {
+        pinErrorMsg.style.color = '#10b981';
+        if (isRestored) {
+          pinErrorMsg.textContent = '🎉 ક્લાઉડમાંથી ડેટા આવી ગયો છે! ખુલી રહ્યું છે...';
+        } else if (isNew) {
+          pinErrorMsg.textContent = 'નવું એકાઉન્ટ બની ગયું! ખુલી રહ્યું છે...';
+        } else {
+          pinErrorMsg.textContent = 'PIN સાચો છે! ખુલી રહ્યું છે...';
+        }
+      }
+
+      // Load separate data for this user
+      loadData();
+      renderDashboard();
+      updateActiveUserUI();
+    } catch (e) {
+      console.error('unlockUserSession setup error:', e);
+    }
 
     setTimeout(() => {
       pinLockScreen.classList.add('unlocking');
       setTimeout(() => {
         pinLockScreen.classList.remove('active', 'unlocking');
+        isPinChecking = false;
         enteredPin = '';
         updateDots();
         if (pinErrorMsg) {
@@ -1765,16 +1837,27 @@ function applyFullLedgerSnapshot(data, phone = '') {
   if (data.allBizData && typeof data.allBizData === 'object') {
     Object.keys(data.allBizData).forEach(bId => {
       const k = getStorageKeyForBusiness(bId);
-      localStorage.setItem(k, JSON.stringify(data.allBizData[bId]));
+      const rawList = Array.isArray(data.allBizData[bId]) ? data.allBizData[bId] : [];
+      const sanitized = rawList.map(c => ({
+        ...c,
+        transactions: Array.isArray(c.transactions) ? c.transactions : []
+      }));
+      localStorage.setItem(k, JSON.stringify(sanitized));
     });
   }
 
   const currentKey = getStorageKeyForBusiness(activeBusinessId);
   if (Array.isArray(data.customers)) {
-    customers = data.customers;
+    customers = data.customers.map(c => ({
+      ...c,
+      transactions: Array.isArray(c.transactions) ? c.transactions : []
+    }));
     localStorage.setItem(currentKey, JSON.stringify(customers));
   } else if (data.allBizData && Array.isArray(data.allBizData[activeBusinessId])) {
-    customers = data.allBizData[activeBusinessId];
+    customers = data.allBizData[activeBusinessId].map(c => ({
+      ...c,
+      transactions: Array.isArray(c.transactions) ? c.transactions : []
+    }));
     localStorage.setItem(currentKey, JSON.stringify(customers));
   }
 
@@ -1789,10 +1872,14 @@ function applyFullLedgerSnapshot(data, phone = '') {
   if (data.qrImage) localStorage.setItem(QR_IMAGE_KEY, data.qrImage);
   if (data.dueDates) localStorage.setItem('mybook_due_dates_v1', typeof data.dueDates === 'string' ? data.dueDates : JSON.stringify(data.dueDates));
 
-  loadData();
-  renderDashboard();
-  if (typeof updateActiveBusinessUI === 'function') updateActiveBusinessUI();
-  if (typeof renderCustomersPageView === 'function') renderCustomersPageView();
+  try {
+    loadData();
+    renderDashboard();
+    if (typeof updateActiveBusinessUI === 'function') updateActiveBusinessUI();
+    if (typeof renderCustomersPageView === 'function') renderCustomersPageView();
+  } catch (err) {
+    console.error('Error rendering snapshot data:', err);
+  }
 }
 
 // Push to Cloud
@@ -2441,8 +2528,10 @@ function renderCustomerCards() {
     } else if (currentSort === 'name-asc') {
       return a.name.localeCompare(b.name);
     } else {
-      const dateA = a.transactions.length ? new Date(a.transactions[0].date).getTime() : new Date(a.createdAt).getTime();
-      const dateB = b.transactions.length ? new Date(b.transactions[0].date).getTime() : new Date(b.createdAt).getTime();
+      const txnsA = Array.isArray(a.transactions) ? a.transactions : [];
+      const txnsB = Array.isArray(b.transactions) ? b.transactions : [];
+      const dateA = txnsA.length ? new Date(txnsA[0].date).getTime() : new Date(a.createdAt || 0).getTime();
+      const dateB = txnsB.length ? new Date(txnsB[0].date).getTime() : new Date(b.createdAt || 0).getTime();
       return dateB - dateA;
     }
   });
@@ -2485,7 +2574,8 @@ function renderCustomerCards() {
       }
     }
 
-    const lastTxn = cust.transactions.length > 0 ? cust.transactions[0] : null;
+    const custTxns = Array.isArray(cust.transactions) ? cust.transactions : [];
+    const lastTxn = custTxns.length > 0 ? custTxns[0] : null;
     const lastTxnText = lastTxn ? `${formatDateDMY(lastTxn.date)} • ${lastTxn.note}` : 'No transactions';
 
     return `
@@ -2798,9 +2888,10 @@ function updateCustomerDetailView(cust) {
   // Transactions list
   const listContainer = document.getElementById('detailTransactionList');
   const countSpan = document.getElementById('detailTxnCount');
-  countSpan.textContent = `${cust.transactions.length} Entries`;
+  const custTxns = Array.isArray(cust.transactions) ? cust.transactions : [];
+  if (countSpan) countSpan.textContent = `${custTxns.length} Entries`;
 
-  if (cust.transactions.length === 0) {
+  if (custTxns.length === 0) {
     listContainer.innerHTML = `
       <div style="text-align: center; padding: 40px 16px; color: var(--text-muted);">
         <i class="ri-file-list-3-line" style="font-size: 32px; display:block; margin-bottom:8px;"></i>
@@ -2810,7 +2901,7 @@ function updateCustomerDetailView(cust) {
     return;
   }
 
-  listContainer.innerHTML = cust.transactions.map(t => {
+  listContainer.innerHTML = custTxns.map(t => {
     const isGave = t.type === 'give';
     return `
       <div class="txn-row">
@@ -2846,7 +2937,7 @@ window.deleteTxn = function (customerId, txnId) {
   const cust = customers.find(c => c.id === customerId);
   if (!cust) return;
 
-  cust.transactions = cust.transactions.filter(t => t.id !== txnId);
+  cust.transactions = (Array.isArray(cust.transactions) ? cust.transactions : []).filter(t => t.id !== txnId);
   saveData();
   renderDashboard();
   updateCustomerDetailView(cust);
